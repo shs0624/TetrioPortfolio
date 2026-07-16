@@ -1,0 +1,84 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="소스 파일">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
+      <Extensions>cpp;c;cc;cxx;c++;cppm;ixx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    </Filter>
+    <Filter Include="헤더 파일">
+      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
+      <Extensions>h;hh;hpp;hxx;h++;hm;inl;inc;ipp;xsd</Extensions>
+    </Filter>
+    <Filter Include="리소스 파일">
+      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
+      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
+    </Filter>
+    <Filter Include="LoginServer">
+      <UniqueIdentifier>{538e1061-b204-47bf-b112-00bb6ddae831}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Lib">
+      <UniqueIdentifier>{a0dced4d-8ba6-4d92-aa7f-bebc19a8e762}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="DB">
+      <UniqueIdentifier>{2005d320-9f3c-40d8-a399-0686900ec11b}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Debug">
+      <UniqueIdentifier>{b0b8a163-0fbd-4751-a7cc-9abf1ecdb1df}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="NetServer">
+      <UniqueIdentifier>{b933efa3-704b-4a25-8207-f8ffcc6c046e}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="TetrisLoginServer.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="DBConnector.cpp">
+      <Filter>DB</Filter>
+    </ClCompile>
+    <ClCompile Include="ProcademyProfiler.cpp">
+      <Filter>Debug</Filter>
+    </ClCompile>
+    <ClCompile Include="LoginServer.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="NetServer.cpp">
+      <Filter>NetServer</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="LockFreeQueue.h">
+      <Filter>Lib</Filter>
+    </ClInclude>
+    <ClInclude Include="LockFreeStack_Re.h">
+      <Filter>Lib</Filter>
+    </ClInclude>
+    <ClInclude Include="Includes.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="DBConnector.h">
+      <Filter>DB</Filter>
+    </ClInclude>
+    <ClInclude Include="DBQueryProtocol.h">
+      <Filter>DB</Filter>
+    </ClInclude>
+    <ClInclude Include="DBWriter.h">
+      <Filter>DB</Filter>
+    </ClInclude>
+    <ClInclude Include="DebugLog.h">
+      <Filter>Debug</Filter>
+    </ClInclude>
+    <ClInclude Include="LogManager.h">
+      <Filter>Debug</Filter>
+    </ClInclude>
+    <ClInclude Include="NetServer.h">
+      <Filter>NetServer</Filter>
+    </ClInclude>
+    <ClInclude Include="LoginServer.h">
+      <Filter>소스 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="RefCountPointer.h">
+      <Filter>Lib</Filter>
+    </ClInclude>
+  </ItemGroup>
+</Project>
