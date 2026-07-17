@@ -25,15 +25,9 @@ void LoginServer::InitLoginServer(ULONG ip, LONG port, bool bNagleEnabled, int m
 	int concurrentCount = ((int)si.dwNumberOfProcessors / 2) - 1;
 	StartNetServer(ip, port, workCount, concurrentCount, true, maxConnection);
 
-	InitializeSRWLock(&_SessionMapLock);
-
-	_hQuitEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
-	_hTimeoutEvent = CreateEvent(NULL, FALSE, TRUE, NULL);
-
-	_SessionPool = new procademy::CMemoryPool_LockFree<st_SESSION>(maxConnection, false, false);
 	_DBWriterManager = new SHS::DBWriterManager();
 	_DBWriterManager->InitDBWriterManager(workCount);
-	
+
 	_TimerThreadHandle = (HANDLE)_beginthreadex(NULL, 0, TimerThread, this, 0, &_TimerThreadID);
 }
 
@@ -53,16 +47,6 @@ cpp_redis::client& LoginServer::GetTLSRedisClient()
 
 bool LoginServer::OnAccept(ULONGLONG sessionID, SOCKADDR_IN clientAddr)
 {
-	st_SESSION* pSession = _SessionPool->Alloc();
-
-	pSession->ulSessionID = sessionID;
-	pSession->ClientAddr = clientAddr;
-	pSession->dwLastRecvTime = timeGetTime();
-
-	AcquireSRWLockExclusive(&_SessionMapLock);
-	_SessionMap.insert({ sessionID, pSession });
-	ReleaseSRWLockExclusive(&_SessionMapLock);
-
 	_pLog._dwSessionCount++;
 
 	return true;
@@ -70,21 +54,8 @@ bool LoginServer::OnAccept(ULONGLONG sessionID, SOCKADDR_IN clientAddr)
 
 void LoginServer::OnRelease(ULONGLONG sessionID)
 {
-	// 세션 Release
-	AcquireSRWLockExclusive(&_SessionMapLock);
-	auto itSession = _SessionMap.find(sessionID);
-	if (itSession != _SessionMap.end())
-	{
-		st_SESSION* pSession = (*itSession).second;
-		_SessionMap.erase(sessionID);
-		_SessionPool->Free(pSession);
-
-		ReleaseSRWLockExclusive(&_SessionMapLock);
-
-		_pLog._dwSessionCount--;
-	}
-	else
-		ReleaseSRWLockExclusive(&_SessionMapLock);
+	// 세션 Release -> 성공한 경우에만 탈거임
+	_pLog._dwSessionCount--;
 }
 
 void LoginServer::OnRecv(ULONGLONG sessionID, RefCountPointer& cPacket)
@@ -92,24 +63,6 @@ void LoginServer::OnRecv(ULONGLONG sessionID, RefCountPointer& cPacket)
 	WCHAR gameServerIP[16];
 	WCHAR chatServerIP[16];
 	WCHAR clientAddr[16];
-
-	AcquireSRWLockExclusive(&_SessionMapLock);
-	auto itSession = _SessionMap.find(sessionID);
-	if (itSession != _SessionMap.end())
-	{
-		if (!InetNtop(AF_INET, &((*itSession).second)->ClientAddr.sin_addr, clientAddr, 16)) {
-			ReleaseSRWLockExclusive(&_SessionMapLock);
-			Disconnect(sessionID);
-			DebugBreak();
-			return;
-		}
-	}
-	else
-	{
-		ReleaseSRWLockExclusive(&_SessionMapLock);
-		return;
-	}
-	ReleaseSRWLockExclusive(&_SessionMapLock);
 
 	BYTE status = 1;
 
@@ -219,44 +172,4 @@ void LoginServer::mpLoginRES(RefCountPointer& cPacket, INT64 accountNum, BYTE st
 void LoginServer::OnError(int errorcode, WCHAR* message)
 {
 
-}
-
-// time 측정을 위한 함수
-void LoginServer::TimeCheck(DWORD sleepTime)
-{
-	AcquireSRWLockShared(&_SessionMapLock);
-	for (auto it = _SessionMap.begin(); it != _SessionMap.end(); it++)
-	{
-		st_SESSION* pSession = (*it).second;
-		DWORD timeDiff = timeGetTime() - pSession->dwLastRecvTime;
-		if (timeDiff >= dfTIMEOUT_SESSION)
-		{
-			Disconnect(pSession->ulSessionID);
-			_pLog._dwTimeoutSessionTotal++;
-			continue;
-		}
-	}
-	ReleaseSRWLockShared(&_SessionMapLock);
-}
-
-unsigned int WINAPI LoginServer::TimerThread(LPVOID arg)
-{
-	LoginServer* thisPtr = (LoginServer*)arg;
-
-	LogController::GetInstance()->RegisterLogStruct(&_pLog);
-
-	HANDLE hHandleArr[2] = { thisPtr->_hQuitEvent, thisPtr->_hTimeoutEvent };
-
-	DWORD ret = 0;
-	while (1)
-	{
-		thisPtr->TimeCheck(dfSLEEPTIME);
-
-		ret = WaitForMultipleObjects(2, hHandleArr, FALSE, dfSLEEPTIME);
-		if (ret == WAIT_OBJECT_0)
-		{
-			// 서버 종료
-			return 0;
-		}
-	}
 }

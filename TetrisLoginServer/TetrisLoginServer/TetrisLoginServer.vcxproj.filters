@@ -80,5 +80,11 @@
     <ClInclude Include="RefCountPointer.h">
       <Filter>Lib</Filter>
     </ClInclude>
+    <ClInclude Include="CCrashDump.h">
+      <Filter>Debug</Filter>
+    </ClInclude>
+    <ClInclude Include="TLSMemoryPool.h">
+      <Filter>Lib</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

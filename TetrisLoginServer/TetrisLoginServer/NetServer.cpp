@@ -176,6 +176,7 @@ bool CNetServer::AcceptProc(CNetServer* thisPtr)
 	ptr->stIORefCount.ulReleaseCheck = 0;
 	ptr->bSendFlag = false;
 	ptr->bCanceled = false;
+	ptr->bUseFlag = true;
 	ptr->sock = client_sock;
 
 	InterlockedIncrement((LONG*)&_iAcceptTPS);
@@ -325,6 +326,48 @@ unsigned int WINAPI CNetServer::IOCPWorkerThread(LPVOID arg)
 	}
 }
 
+unsigned int WINAPI CNetServer::TimerThread(LPVOID arg)
+{
+	const DWORD _sSleepTime = 1000;
+
+	CNetServer* thisPtr = (CNetServer*)arg;
+
+	LogController::GetInstance()->RegisterLogStruct(&_pLog);
+
+	HANDLE hHandleArr[2] = { thisPtr->_hQuitEvent, thisPtr->_hTimeoutEvent };
+
+	DWORD ret = 0;
+	while (1)
+	{
+		thisPtr->TimeCheck(_sSleepTime);
+
+		ret = WaitForMultipleObjects(2, hHandleArr, FALSE, _sSleepTime);
+		if (ret == WAIT_OBJECT_0)
+		{
+			return 0;
+		}
+	}
+}
+
+void CNetServer::TimeCheck(const DWORD sleepTime)
+{
+	for (int i = 0; i < _imaxConnection; i++)
+	{
+		st_NetSession* pSession = _sessionArr + i;
+
+		if (!pSession->bUseFlag)
+			continue;
+
+		DWORD timeDiff = timeGetTime() - pSession->dwLastRecvTime;
+		if (timeDiff >= dfTIMEOUT_SESSION)
+		{
+			Disconnect(pSession->ulSessionID);
+			_pLog._dwTimeoutSessionTotal++;
+			continue;
+		}
+	}
+}
+
 void CNetServer::InitializeSessions(ULONG maxConnection)
 {
 	_emptyIndexStack = new LockFreeStack<ULONGLONG>();
@@ -351,6 +394,9 @@ bool CNetServer::Init(int maxConnection)
 	SYSTEM_INFO si;
 	GetSystemInfo(&si);
 
+	_hQuitEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
+	_hTimeoutEvent = CreateEvent(NULL, FALSE, TRUE, NULL);
+
 	int concurrentThread = si.dwNumberOfProcessors - 2;
 	if (concurrentThread <= 0)
 		concurrentThread = si.dwNumberOfProcessors - 1;
@@ -361,6 +407,8 @@ bool CNetServer::Init(int maxConnection)
 	_acceptThreadHandle = (HANDLE)_beginthreadex(NULL, 0, AcceptThread, this, 0, &_acceptThreadID);
 	if (_acceptThreadHandle == NULL)
 		return false;
+
+	_TimerThreadHandle = (HANDLE)_beginthreadex(NULL, 0, TimerThread, this, 0, &_TimerThreadID);
 
 	//IOCP_THREADCOUNT
 	for (int i = 0; i < IOCP_THREADCOUNT; i++)
@@ -451,6 +499,7 @@ bool CNetServer::RecvProc_Net(st_NetSession* ptr, DWORD cbTransferred)
 
 		// netHeader만큼 이동시키고, OnRecv
 		OnRecv(ptr->ulSessionID, csPacket);
+		ptr->dwLastRecvTime = timeGetTime();
 		_pLog._dwRecvMessageTPS++;
 	}
 
@@ -788,6 +837,7 @@ void CNetServer::ReleaseSession(ULONGLONG ulSessionID)
 			_pLog._dwPacketPoolUse--;
 	}
 
+	ptr->bUseFlag = false;
 	ptr->dwSendCount = 0;
 	closesocket(ptr->sock);
 

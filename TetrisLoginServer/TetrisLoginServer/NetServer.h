@@ -1,4 +1,7 @@
 #pragma once
+#define dfTIMEOUT_SESSION 10000
+
+#define MAX_PACKET_BATCH 300
 #define PROTOCOL_MAX_SIZE 500
 #define SERVERPORT	20210
 #define PROTOCOL_SIZE 10
@@ -33,6 +36,10 @@ struct st_NetSession
 	LockFreeQueue<RefCountPointer>* sendBuf;
 	CRingBuffer* recvBuf;
 	RefCountPointer cPacketArr[200];
+
+	// 타임아웃용 시간
+	DWORD dwLastRecvTime;
+	BOOL bUseFlag;
 
 	alignas(8) st_IORefCheck stIORefCount;
 	DWORD dwSendCount;
@@ -87,10 +94,12 @@ protected:
 
 	SOCKET _ListenSocket;
 
+	HANDLE _TimerThreadHandle;
 	HANDLE _acceptThreadHandle;
 	HANDLE _NetIOCPHandle;
 	HANDLE _NetIOCPWorkerThreadHandleArr[50];
 
+	unsigned int _TimerThreadID;
 	unsigned int _acceptThreadID;
 	unsigned int _NetIOCPWorkerThreadID[50];
 
@@ -98,6 +107,9 @@ protected:
 	st_NetSession* _sessionArr;
 
 	LockFreeStack<ULONGLONG>* _emptyIndexStack;
+
+	HANDLE _hQuitEvent;
+	HANDLE _hTimeoutEvent;
 
 	// 초기화 함수
 	void InitializeSessions(ULONG maxConnection);
@@ -111,6 +123,9 @@ protected:
 	// 스레드 함수들
 	static unsigned int WINAPI AcceptThread(LPVOID arg);
 	static unsigned int WINAPI IOCPWorkerThread(LPVOID arg);
+	static unsigned int WINAPI TimerThread(LPVOID arg);
+
+	void TimeCheck(const DWORD sleepTime);
 
 	// 메세지 처리를 위한 함수
 	bool AcceptProc(CNetServer* thisPtr);
