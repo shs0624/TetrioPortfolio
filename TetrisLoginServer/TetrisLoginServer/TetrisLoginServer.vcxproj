@@ -146,6 +146,7 @@
     <ClInclude Include="LoginServer.h" />
     <ClInclude Include="LogManager.h" />
     <ClInclude Include="NetServer.h" />
+    <ClInclude Include="Protocol.h" />
     <ClInclude Include="RefCountPointer.h" />
     <ClInclude Include="TLSMemoryPool.h" />
   </ItemGroup>

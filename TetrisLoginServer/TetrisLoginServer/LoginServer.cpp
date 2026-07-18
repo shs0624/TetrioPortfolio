@@ -73,8 +73,11 @@ void LoginServer::OnRecv(ULONGLONG sessionID, RefCountPointer& cPacket)
 	INT64 AccountNo;
 	(**cPacket) >> AccountNo;
 
-	char sessionKey[64];
-	(*cPacket)->GetData(sessionKey, sizeof(sessionKey));
+	char ID[20];
+	(*cPacket)->GetData(ID, sizeof(ID));
+
+	char Passwd[20];
+	(*cPacket)->GetData(Passwd, sizeof(Passwd));
 
 	// @@TODO: DB에 전송할 때 여기에 넣기
 	SHS::DBTLSConnector* pDBConnector = SHS::DBTLSConnector::GetDBConnectorTLS();
@@ -82,7 +85,8 @@ void LoginServer::OnRecv(ULONGLONG sessionID, RefCountPointer& cPacket)
 	LPVOID pAddr = pDBConnector->AllocJobAddress();
 	CDBLogin* pCDBLogin = new(pAddr)CDBLogin;
 	pCDBLogin->_AccountNum = AccountNo;
-	strcpy_s(pCDBLogin->_SessionKey, 64, sessionKey);
+	strcpy_s(pCDBLogin->_ID, 20, ID);
+	strcpy_s(pCDBLogin->_Passwd, 20, Passwd);
 
 	pDBConnector->SendQuery_SELECT((IDBJob*)pCDBLogin);
 	if (!pDBConnector->StoreQueryResult())
@@ -99,7 +103,7 @@ void LoginServer::OnRecv(ULONGLONG sessionID, RefCountPointer& cPacket)
 		// 실패 패킷 전송 준비
 		(*cPacket)->Clear(sizeof(st_NetHeader));
 
-		mpLoginRES(cPacket, AccountNo, status, NULL, NULL, NULL, NULL, NULL, NULL);
+		mpLoginRES(cPacket, AccountNo, status, NULL, NULL, NULL, NULL);
 		SendPacket_UniCast(sessionID, cPacket);
 
 		Disconnect(sessionID);
@@ -109,59 +113,36 @@ void LoginServer::OnRecv(ULONGLONG sessionID, RefCountPointer& cPacket)
 	pDBConnector->FreeQueryResult();
 	_pLog._dwDBSelectTPS++;
 
+	// 얻어온 결과 꺼내서 Passwd 비교
+	std::string sessionKey;
+	std::string nickname;
+
 	// Redis에 넣기.
 	cpp_redis::client& _redisClient = GetTLSRedisClient();
-	_redisClient.setex(std::to_string(AccountNo), 15, sessionKey);
+	_redisClient.hset(std::to_string(AccountNo), "SessionKey", sessionKey);
+	_redisClient.hset(std::to_string(AccountNo), "Nickname", nickname);
 	_redisClient.sync_commit();
 
 	// 패킷 전송 준비
 	(*cPacket)->Clear(sizeof(st_NetHeader));
 
-	WCHAR ID[20];
-	WCHAR Nickname[20];
-
-	std::wstring wsID = L"ID_" + std::to_wstring(AccountNo);
-	wcsncpy_s(ID, wsID.c_str(), sizeof(WCHAR) * 20);
-
-	std::wstring wsNick = L"NICK_" + std::to_wstring(AccountNo);
-	wcsncpy_s(Nickname, wsNick.c_str(), sizeof(WCHAR) * 20);
-
-	if (wcscmp(clientAddr, L"127.0.0.1") == 0)
-	{
-		wcsncpy_s(chatServerIP, _countof(chatServerIP), L"127.0.0.1", sizeof(WCHAR) * 16);
-	}
-	else if (wcscmp(clientAddr, L"10.0.1.2") == 0)
-	{
-		wcsncpy_s(chatServerIP, _countof(chatServerIP), L"10.0.1.1", sizeof(WCHAR) * 16);
-	}
-	else if (wcscmp(clientAddr, L"10.0.2.2") == 0)
-	{
-		wcsncpy_s(chatServerIP, _countof(chatServerIP), L"10.0.2.1", sizeof(WCHAR) * 16);
-	}
-	else
-	{
-		// 외부에서 온 접속이니 외부 IP 
-		wcsncpy_s(chatServerIP, _countof(chatServerIP), dfCHATSERVER_PUBLICIP, sizeof(WCHAR) * 16);
-	}
-
+	// IP 주소 관련 수정 필요
 	wcsncpy_s(gameServerIP, _countof(gameServerIP), dfGAMESERVER_IP, sizeof(WCHAR) * 16);
+	wcsncpy_s(chatServerIP, _countof(chatServerIP), dfCHATSERVER_PUBLICIP, sizeof(WCHAR) * 16);
 
 	status = dfMONITOR_TOOL_LOGIN_OK;
 
-	mpLoginRES(cPacket, AccountNo, status, ID, Nickname,
-		gameServerIP, (USHORT)dfGAMESERVER_PORT, chatServerIP, (USHORT)dfCHATSERVER_PORT);
+	mpLoginRES(cPacket, AccountNo, status, gameServerIP, (USHORT)dfGAMESERVER_PORT,
+		chatServerIP, (USHORT)dfCHATSERVER_PORT);
 
 	SendPacket_UniCast(sessionID, cPacket);
 }
 
-void LoginServer::mpLoginRES(RefCountPointer& cPacket, INT64 accountNum, BYTE status, WCHAR* ID, WCHAR* Nickname, WCHAR* gameIP, USHORT gamePort, WCHAR* chatIP, USHORT chatPort)
+void LoginServer::mpLoginRES(RefCountPointer& cPacket, INT64 accountNum, BYTE status, WCHAR* gameIP, USHORT gamePort, WCHAR* chatIP, USHORT chatPort)
 {
 	(**cPacket) << (WORD)en_PACKET_CS_LOGIN_RES_LOGIN;
 	(**cPacket) << accountNum;
 	(**cPacket) << status;
-
-	(*cPacket)->PutData((char*)ID, sizeof(WCHAR) * 20);
-	(*cPacket)->PutData((char*)Nickname, sizeof(WCHAR) * 20);
 
 	(*cPacket)->PutData((char*)gameIP, sizeof(WCHAR) * 16);
 	(**cPacket) << gamePort;

@@ -33,7 +33,7 @@ public:
 private:
 	cpp_redis::client& GetTLSRedisClient();
 
-	void mpLoginRES(RefCountPointer& cPacket, INT64 accountNum, BYTE status, WCHAR* ID, WCHAR* Nickname, WCHAR* gameIP, USHORT gamePort, WCHAR* chatIP, USHORT chatPort);
+	void mpLoginRES(RefCountPointer& cPacket, INT64 accountNum, BYTE status, WCHAR* gameIP, USHORT gamePort, WCHAR* chatIP, USHORT chatPort);
 
 	SHS::DBWriterManager* _DBWriterManager;
 

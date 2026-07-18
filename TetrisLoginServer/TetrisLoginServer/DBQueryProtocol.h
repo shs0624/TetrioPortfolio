@@ -25,13 +25,15 @@ public:
 		// Äõ¸® »ý¼º
 		oss.clear();
 
-		oss << "SELECT * FROM accountdb.sessionkey WHERE accountno = '"
-			<< _AccountNum << "';";
+		oss << "SELECT accountnum, passwd, nickname FROM accountdb WHERE id = '"
+			<< _ID << "';";
 
 		return true;
 	}
 
 	_int64 _AccountNum;
+	char _ID[20];
+	char _Passwd[20];
 	char _SessionKey[64];
 };
 

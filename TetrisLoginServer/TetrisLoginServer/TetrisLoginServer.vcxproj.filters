@@ -30,20 +30,20 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="TetrisLoginServer.cpp">
-      <Filter>소스 파일</Filter>
-    </ClCompile>
     <ClCompile Include="DBConnector.cpp">
       <Filter>DB</Filter>
     </ClCompile>
     <ClCompile Include="ProcademyProfiler.cpp">
       <Filter>Debug</Filter>
     </ClCompile>
-    <ClCompile Include="LoginServer.cpp">
-      <Filter>소스 파일</Filter>
-    </ClCompile>
     <ClCompile Include="NetServer.cpp">
       <Filter>NetServer</Filter>
+    </ClCompile>
+    <ClCompile Include="LoginServer.cpp">
+      <Filter>LoginServer</Filter>
+    </ClCompile>
+    <ClCompile Include="TetrisLoginServer.cpp">
+      <Filter>LoginServer</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -74,9 +74,6 @@
     <ClInclude Include="NetServer.h">
       <Filter>NetServer</Filter>
     </ClInclude>
-    <ClInclude Include="LoginServer.h">
-      <Filter>소스 파일</Filter>
-    </ClInclude>
     <ClInclude Include="RefCountPointer.h">
       <Filter>Lib</Filter>
     </ClInclude>
@@ -85,6 +82,12 @@
     </ClInclude>
     <ClInclude Include="TLSMemoryPool.h">
       <Filter>Lib</Filter>
+    </ClInclude>
+    <ClInclude Include="Protocol.h">
+      <Filter>LoginServer</Filter>
+    </ClInclude>
+    <ClInclude Include="LoginServer.h">
+      <Filter>LoginServer</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>
