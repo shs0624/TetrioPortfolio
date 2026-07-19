@@ -111,19 +111,19 @@ namespace SHS
 		}
 
 		// 전부 UTF-16으로?
-		int GetInt(const char* columnName)
+		int GetInt(const int enColumn)
 		{
-
+			return atoi(sql_row[enColumn]);
 		}
 
-		_int64 GetInt64(const char* columnName)
+		_int64 GetInt64(const int enColumn)
 		{
-
+			return _atoi64(sql_row[enColumn]);
 		}
 
-		char* GetString(const char* columnName)
+		char* GetString(const int enColumn)
 		{
-
+			return sql_row[enColumn];
 		}
 
 	private:

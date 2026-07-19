@@ -110,12 +110,26 @@ void LoginServer::OnRecv(ULONGLONG sessionID, RefCountPointer& cPacket)
 		return;
 	}
 
+	// 얻어온 결과 꺼내서 Passwd 비교
+	std::string sessionKey = GenerateSessionKey();
+	std::string passwd = pDBConnector->GetString(_enPasswd);
+	std::string nickname(pDBConnector->GetString(_enNickname));
+
 	pDBConnector->FreeQueryResult();
 	_pLog._dwDBSelectTPS++;
 
-	// 얻어온 결과 꺼내서 Passwd 비교
-	std::string sessionKey;
-	std::string nickname;
+	if (passwd.compare(Passwd) != 0)
+	{
+		status = dfLOGIN_STATUS_ACCOUNT_MISS;
+		// 실패 패킷 전송 준비
+		(*cPacket)->Clear(sizeof(st_NetHeader));
+
+		mpLoginRES(cPacket, AccountNo, status, NULL, NULL, NULL, NULL);
+		SendPacket_UniCast(sessionID, cPacket);
+
+		Disconnect(sessionID);
+		return;
+	}
 
 	// Redis에 넣기.
 	cpp_redis::client& _redisClient = GetTLSRedisClient();
@@ -136,6 +150,24 @@ void LoginServer::OnRecv(ULONGLONG sessionID, RefCountPointer& cPacket)
 		chatServerIP, (USHORT)dfCHATSERVER_PORT);
 
 	SendPacket_UniCast(sessionID, cPacket);
+}
+
+std::string LoginServer::GenerateSessionKey()
+{
+	static const std::string alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+	const size_t KEY_LEN = 64;
+	BYTE randomBytes[KEY_LEN];
+
+	std::string sessionKey;
+
+	int len = alphabet.size();
+	for (int i = 0; i < KEY_LEN; i++)
+	{
+		int randNum = (rand() % len);
+		sessionKey.push_back(alphabet[randNum]);
+	}
+
+	return sessionKey;
 }
 
 void LoginServer::mpLoginRES(RefCountPointer& cPacket, INT64 accountNum, BYTE status, WCHAR* gameIP, USHORT gamePort, WCHAR* chatIP, USHORT chatPort)

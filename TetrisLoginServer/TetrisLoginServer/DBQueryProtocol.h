@@ -1,6 +1,13 @@
 #pragma once
 #define QUERY_MAXCLASSSIZE 80
 
+enum enLogin_Column
+{
+	_enAccountNum = 0,
+	_enPasswd = 1,
+	_enNickname = 2
+};
+
 enum enQueryType
 {
 	_enLogin
