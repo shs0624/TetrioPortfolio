@@ -46,7 +46,7 @@ enum en_PACKET_TYPE
 	//	}
 	//
 	//------------------------------------------------------------
-	en_PACKET_CS_TETRIS_RES_LOGIN,
+	en_PACKET_CS_TETRIS_RES_REGISTER,
 
 	//------------------------------------------------------------
 	//  로그인 요청
@@ -70,6 +70,10 @@ enum en_PACKET_TYPE
 	//
 	//		BYTE	Status				// 0:실패	1:성공
 	//		INT64	AccountNo
+	//		WCHAR	GameIP[16];
+	//		USHORT	GamePort;
+	// 
+	//		WCHAR	SessionKey[64]
 	//	}
 	//
 	//------------------------------------------------------------
@@ -233,3 +237,12 @@ enum en_PACKET_TYPE
 };
 
 //#endif
+
+enum en_PACKETTYPE_TETRIS_RES_LOGIN
+{
+	dfTETRIS_LOGIN_OK = 1,		// 로그인 성공
+	dfTETRIS_LOGIN_ERR_NOSERVER = 2,		// 서버이름 오류 (매칭미스)
+	dfTETRIS_LOGIN_ERR_ID = 3,				// ID 오류
+	dfTETRIS_LOGIN_ERR_PASSWD = 4,			// 패스워드 오류
+	dfTETRIS_LOGIN_ERR_SESSIONKEY = 5,		// 로그인 세션키 오류
+};

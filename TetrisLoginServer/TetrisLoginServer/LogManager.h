@@ -1,11 +1,15 @@
 #pragma once
-#include "PDHMonitor.h"
 #include "Includes.h"
 #include "CPUUsage.h"
-#include "LanClient.h"
-#include "CommonProtocol_Login.h"
-#include "MonitorClient.h"
 #define dfLOG_MAX 10000
+//#define MONITORING_ON
+
+#ifdef MONITORING_ON
+	#include "LanClient.h"
+	#include "PDHMonitor.h"
+	#include "MonitorProtocol.h"
+	#include "MonitorClient.h"
+#endif
 
 struct stChatLog
 {
@@ -53,6 +57,7 @@ public:
 			int idx = InterlockedIncrement(&_dwLogArrIdx);
 			_LogStructArr[idx] = ptr;
 		}
+
 
 		return ptr;
 	}
@@ -107,11 +112,13 @@ private:
 	{
 		_dwTlsIdx = TlsAlloc();
 
-		_pCPUUsage = new CCpuUsage();
+#ifdef MONITORING_ON
 		_pPDHMonitor = new PDHMonitor();
+		_pCpuUsage = new CCpuUsage();
 
 		_pMonitorClient = new MonitorClient();
 		_pMonitorClient->InitMonitorClient();
+#endif
 
 		_hLogUpdateEvent = CreateEvent(NULL, FALSE, FALSE, NULL);
 		_htpsThreadHandle = (HANDLE)_beginthreadex(NULL, 0, LogingThread, this, 0, &_tpsThreadID);
@@ -132,26 +139,29 @@ private:
 		}
 	}
 
-
-	void SendMonitorPacket()
+#ifdef MONITORING_ON
+	void SendChatMonitorPacket()
 	{
 		// 1초마다 갱신
-		_pCPUUsage->UpdateCpuTime();
+		_pCpuUsage->UpdateCpuTime();
 		_pPDHMonitor->QueryUpdate();
 
 		// PDH로 서버 CPU, MEM 얻기
 		int timeStamp = (int)time(NULL);
-		int cpuUsage = _pCPUUsage->ProcessTotal();//_pPDHMonitor->GetCPUUsage();
+		int cpuUsage = _pCpuUsage->ProcessTotal();//_pPDHMonitor->GetCPUUsage();
 		int memoryMB = _pPDHMonitor->GetPrivateMemory() / 1000000;
 
-		_pMonitorClient->SendMonitorData(dfMONITOR_DATA_TYPE_LOGIN_SERVER_RUN, true, timeStamp);
-		_pMonitorClient->SendMonitorData(dfMONITOR_DATA_TYPE_LOGIN_SERVER_CPU, cpuUsage, timeStamp);
-		_pMonitorClient->SendMonitorData(dfMONITOR_DATA_TYPE_LOGIN_SERVER_MEM, memoryMB, timeStamp);
-		_pMonitorClient->SendMonitorData(dfMONITOR_DATA_TYPE_LOGIN_SESSION, _stPrintLog._dwSessionCount, timeStamp);
-		_pMonitorClient->SendMonitorData(dfMONITOR_DATA_TYPE_LOGIN_AUTH_TPS, _stPrintLog._dwDBSelectTPS, timeStamp);
-		_pMonitorClient->SendMonitorData(dfMONITOR_DATA_TYPE_LOGIN_PACKET_POOL, _stPrintLog._dwPacketPoolUse, timeStamp);
+		_pMonitorClient->SendMonitorData(dfMONITOR_DATA_TYPE_CHAT_SERVER_RUN, true, timeStamp);
+		_pMonitorClient->SendMonitorData(dfMONITOR_DATA_TYPE_CHAT_SERVER_CPU, cpuUsage, timeStamp);
+		_pMonitorClient->SendMonitorData(dfMONITOR_DATA_TYPE_CHAT_SERVER_MEM, memoryMB, timeStamp);
+		_pMonitorClient->SendMonitorData(dfMONITOR_DATA_TYPE_CHAT_UPDATE_TPS, _stPrintLog._dwRecvMessageTPS, timeStamp);
+		_pMonitorClient->SendMonitorData(dfMONITOR_DATA_TYPE_CHAT_SESSION, _stPrintLog._dwSessionCount, timeStamp);
+		_pMonitorClient->SendMonitorData(dfMONITOR_DATA_TYPE_CHAT_PLAYER, _stPrintLog._dwUserCount, timeStamp);
+		_pMonitorClient->SendMonitorData(dfMONITOR_DATA_TYPE_CHAT_PACKET_POOL, _stPrintLog._dwPacketPoolUse, timeStamp);
 		//_pMonitorClient->SendMonitorData(dfMONITOR_DATA_TYPE_CHAT_UPDATEMSG_POOL, _stPrintLog., timeStamp);
+		
 	}
+#endif
 
 	static unsigned int WINAPI LogingThread(LPVOID arg)
 	{
@@ -161,7 +171,10 @@ private:
 		{
 			thisPtr->ReadLog();
 
-			thisPtr->SendMonitorPacket();
+#ifdef MONITORING_ON
+			// 채팅서버 로그를 보내자.
+			thisPtr->SendChatMonitorPacket();
+#endif
 
 			thisPtr->ResetTPS();
 
@@ -173,16 +186,18 @@ private:
 		return 0;
 	}
 
-	CCpuUsage* _pCPUUsage;
+#ifdef MONITORING_ON
+	CCpuUsage* _pCpuUsage;
 	PDHMonitor* _pPDHMonitor;
 	MonitorClient* _pMonitorClient;
+#endif
 
 	stChatLog _stPrintLog;
 
 	// 몇 번 TLS 주소에 구조체가 저장되어 있는가
 	DWORD _dwTlsIdx;
 	DWORD _dwLogArrIdx;
-	stChatLog* _LogStructArr[100];
+	stChatLog* _LogStructArr[500];
 
 	HANDLE _hLogUpdateEvent;
 	HANDLE _htpsThreadHandle;

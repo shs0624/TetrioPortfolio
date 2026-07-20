@@ -1,4 +1,5 @@
 #pragma once
+#pragma once
 #include "DBWriter.h"
 #define dfSECTOR_MAX_Y 50
 #define dfSECTOR_MAX_X 50
@@ -9,10 +10,10 @@
 
 #define dfCHATSERVER_PORT 20204
 
-class LoginServer : CNetServer
+class TetrisLoginServer : CNetServer
 {
 public:
-	LoginServer()
+	TetrisLoginServer()
 	{
 
 	}
@@ -33,9 +34,11 @@ public:
 private:
 	cpp_redis::client& GetTLSRedisClient();
 
-	std::string GenerateSessionKey();
+	std::wstring GenerateSessionKey();
 
-	void mpLoginRES(RefCountPointer& cPacket, INT64 accountNum, BYTE status, WCHAR* gameIP, USHORT gamePort, WCHAR* chatIP, USHORT chatPort);
+	void MessageProc_Login(RefCountPointer& cPacket, ULONGLONG sessionID);
+
+	void mpLoginRES(RefCountPointer& cPacket, INT64 accountNum, BYTE status, WCHAR* gameIP, USHORT gamePort, const WCHAR* sessionKey);
 
 	SHS::DBWriterManager* _DBWriterManager;
 

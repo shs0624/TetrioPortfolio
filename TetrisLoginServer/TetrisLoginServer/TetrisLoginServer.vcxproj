@@ -128,14 +128,18 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="CRingBuffer.cpp" />
+    <ClCompile Include="CSerializationBuffer.cpp" />
     <ClCompile Include="DBConnector.cpp" />
-    <ClCompile Include="LoginServer.cpp" />
+    <ClCompile Include="main.cpp" />
     <ClCompile Include="NetServer.cpp" />
     <ClCompile Include="ProcademyProfiler.cpp" />
     <ClCompile Include="TetrisLoginServer.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="CCrashDump.h" />
+    <ClInclude Include="CRingBuffer.h" />
+    <ClInclude Include="CSerializationBuffer.h" />
     <ClInclude Include="DBConnector.h" />
     <ClInclude Include="DBQueryProtocol.h" />
     <ClInclude Include="DBWriter.h" />
@@ -143,12 +147,14 @@
     <ClInclude Include="Includes.h" />
     <ClInclude Include="LockFreeQueue.h" />
     <ClInclude Include="LockFreeStack_Re.h" />
-    <ClInclude Include="LoginServer.h" />
     <ClInclude Include="LogManager.h" />
     <ClInclude Include="NetServer.h" />
+    <ClInclude Include="ProcademyProfiler.h" />
     <ClInclude Include="Protocol.h" />
     <ClInclude Include="RefCountPointer.h" />
+    <ClInclude Include="TetrisLoginServer.h" />
     <ClInclude Include="TLSMemoryPool.h" />
+    <ClInclude Include="Util.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

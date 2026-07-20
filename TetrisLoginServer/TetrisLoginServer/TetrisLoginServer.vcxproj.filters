@@ -39,11 +39,17 @@
     <ClCompile Include="NetServer.cpp">
       <Filter>NetServer</Filter>
     </ClCompile>
-    <ClCompile Include="LoginServer.cpp">
-      <Filter>LoginServer</Filter>
-    </ClCompile>
     <ClCompile Include="TetrisLoginServer.cpp">
       <Filter>LoginServer</Filter>
+    </ClCompile>
+    <ClCompile Include="main.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="CRingBuffer.cpp">
+      <Filter>Lib</Filter>
+    </ClCompile>
+    <ClCompile Include="CSerializationBuffer.cpp">
+      <Filter>Lib</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -86,8 +92,20 @@
     <ClInclude Include="Protocol.h">
       <Filter>LoginServer</Filter>
     </ClInclude>
-    <ClInclude Include="LoginServer.h">
+    <ClInclude Include="TetrisLoginServer.h">
       <Filter>LoginServer</Filter>
+    </ClInclude>
+    <ClInclude Include="ProcademyProfiler.h">
+      <Filter>Debug</Filter>
+    </ClInclude>
+    <ClInclude Include="Util.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="CRingBuffer.h">
+      <Filter>Lib</Filter>
+    </ClInclude>
+    <ClInclude Include="CSerializationBuffer.h">
+      <Filter>Lib</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>
