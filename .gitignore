@@ -14,7 +14,7 @@
 
 # Static libraries
 *.a
-*.lib
+#*.lib
 
 # Executables
 *.exe
@@ -28,7 +28,7 @@
 # Debug files
 *.dSYM/
 *.idb
-*.pdb
+#*.pdb
 
 ### Objective-C
 # Xcode user settings
