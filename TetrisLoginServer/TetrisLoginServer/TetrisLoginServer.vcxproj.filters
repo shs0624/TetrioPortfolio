@@ -51,6 +51,9 @@
     <ClCompile Include="CSerializationBuffer.cpp">
       <Filter>Lib</Filter>
     </ClCompile>
+    <ClCompile Include="TetrisLoginServer_MakePacket.cpp">
+      <Filter>LoginServer</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="LockFreeQueue.h">

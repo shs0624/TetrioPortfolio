@@ -37,7 +37,11 @@ private:
 	std::wstring GenerateSessionKey();
 
 	void MessageProc_Login(RefCountPointer& cPacket, ULONGLONG sessionID);
+	void MessageProc_Dupcheck(RefCountPointer& cPacket, WORD type, ULONGLONG sessionID);
+	void MessageProc_Register(RefCountPointer& cPacket, ULONGLONG sessionID);
 
+	void mpDupcheckRES(RefCountPointer& cPacket, INT64 accountNum, BYTE status);
+	void mpRegisterRES(RefCountPointer& cPacket, INT64 accountNum, BYTE status);
 	void mpLoginRES(RefCountPointer& cPacket, INT64 accountNum, BYTE status, WCHAR* gameIP, USHORT gamePort, const WCHAR* sessionKey);
 
 	SHS::DBWriterManager* _DBWriterManager;

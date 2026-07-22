@@ -67,7 +67,12 @@ void TetrisLoginServer::OnRecv(ULONGLONG sessionID, RefCountPointer& cPacket)
 
 	switch (type)
 	{
+	case en_PACKET_CS_TETRIS_REQ_DUPCHECK_ID:
+	case en_PACKET_CS_TETRIS_REQ_DUPCHECK_NICKNAME:
+		MessageProc_Dupcheck(cPacket, type, sessionID);
+		break;
 	case en_PACKET_CS_TETRIS_REQ_REGISTER:
+		MessageProc_Register(cPacket, sessionID);
 		break;
 	case en_PACKET_CS_TETRIS_REQ_LOGIN:
 		MessageProc_Login(cPacket, sessionID);
@@ -79,6 +84,214 @@ void TetrisLoginServer::OnRecv(ULONGLONG sessionID, RefCountPointer& cPacket)
 		break;
 	}
 }
+
+void TetrisLoginServer::MessageProc_Register(RefCountPointer& cPacket, ULONGLONG sessionID)
+{
+	BYTE status = 1;
+
+	INT64 AccountNum;
+	(**cPacket) >> AccountNum;
+
+	char ID[20];
+	(*cPacket)->GetData(ID, sizeof(ID));
+
+	char Passwd[20];
+	(*cPacket)->GetData(Passwd, sizeof(Passwd));
+
+	char Nickname[20];
+	(*cPacket)->GetData(Nickname, sizeof(Nickname));
+
+	bool idPass = false;
+	bool nickPass = false;
+
+	// Redis에 id, nickname 검색 -> 중복 가입을 통과했는지 체크
+	cpp_redis::client& _redisClient = GetTLSRedisClient();
+	_redisClient.get("signup:id:" + std::string(ID),
+		[&](cpp_redis::reply& reply) {
+			idPass = !reply.is_null();
+		});
+
+	_redisClient.get("signup:nickname:" + std::string(Nickname),
+		[&](cpp_redis::reply& reply) {
+			nickPass = !reply.is_null();
+		});
+
+	_redisClient.sync_commit();
+
+	if (!idPass || !nickPass)
+	{
+		status = dfTETRIS_REGISTER_ERR_DUPLICATED;
+		// 실패 패킷 전송 준비
+		(*cPacket)->Clear(sizeof(st_NetHeader));
+
+		mpRegisterRES(cPacket, AccountNum, status);
+		SendPacket_UniCast(sessionID, cPacket);
+		return;
+	}
+
+	// 가입하기 -> INSERT
+	SHS::DBTLSConnector* pDBConnector = SHS::DBTLSConnector::GetDBConnectorTLS();
+
+	LPVOID pAddr = pDBConnector->AllocJobAddress();
+	CDBRegister_Insert* pCDBRegister = new(pAddr)CDBRegister_Insert;
+	pCDBRegister->_AccountNum = AccountNum;
+	strcpy_s(pCDBRegister->_Nickname, 20, Nickname);
+	strcpy_s(pCDBRegister->_ID, 20, ID);
+	strcpy_s(pCDBRegister->_Passwd, 20, Passwd);
+
+	int result = pDBConnector->SendQuery_INSERT((IDBJob*)pCDBRegister);
+	if (result != true)
+	{
+		if (result == 1062)
+		{
+			status = dfTETRIS_REGISTER_ERR_DUPLICATED;
+			// 실패 패킷 전송 준비
+			(*cPacket)->Clear(sizeof(st_NetHeader));
+
+			mpRegisterRES(cPacket, AccountNum, status);
+			SendPacket_UniCast(sessionID, cPacket);
+			return;
+		}
+
+		Disconnect(sessionID);
+		return;
+	}
+
+	status = dfTETRIS_REGISTER_OK;
+	(*cPacket)->Clear(sizeof(st_NetHeader));
+
+	mpRegisterRES(cPacket, AccountNum, status);
+	SendPacket_UniCast(sessionID, cPacket);
+	return;
+}
+
+void TetrisLoginServer::MessageProc_Dupcheck(RefCountPointer& cPacket, WORD type, ULONGLONG sessionID)
+{
+	BYTE status = 1;
+
+	INT64 AccountNum;
+	(**cPacket) >> AccountNum;
+
+	char ID[20];
+	(*cPacket)->GetData(ID, sizeof(ID));
+
+	char Nickname[20];
+	(*cPacket)->GetData(Nickname, sizeof(Nickname));
+
+	if (type == en_PACKET_CS_TETRIS_REQ_DUPCHECK_ID)
+	{
+		bool idPass = false;
+
+		// ID 중복 체크 -> SELECT
+		SHS::DBTLSConnector* pDBConnector = SHS::DBTLSConnector::GetDBConnectorTLS();
+
+		LPVOID pAddr = pDBConnector->AllocJobAddress();
+		CDBRegister_Check_ID* pCDDupCheck = new(pAddr)CDBRegister_Check_ID;
+		pCDDupCheck->_AccountNum = AccountNum;
+		strcpy_s(pCDDupCheck->_ID, 20, ID);
+
+		pDBConnector->SendQuery_SELECT((IDBJob*)pCDDupCheck);
+		if (!pDBConnector->StoreQueryResult())
+		{
+			// 그냥 에러난거니까 디버그 브레이크 걸릴예정
+			Disconnect(sessionID);
+			return;
+		}
+
+		// SELECT 결과가 있다 -> 중복됨
+		if (pDBConnector->FetchQueryResult())
+		{
+			idPass = false;
+		}
+		else
+		{
+			// Redis에 id 검색 -> 누군가 중복 가입중인지 체크
+			cpp_redis::client& _redisClient = GetTLSRedisClient();
+			_redisClient.set_advanced("signup:id:" + std::string(ID), "1", true, 60, false, 0, true, false,
+				[&](cpp_redis::reply& reply) {
+					idPass = !reply.is_null();
+				});
+
+			_redisClient.sync_commit();
+		}		
+
+		if (!idPass)
+		{
+			status = dfTETRIS_REGISTER_ERR_DUPLICATED;
+			// 실패 패킷 전송 준비
+			(*cPacket)->Clear(sizeof(st_NetHeader));
+
+			mpDupcheckRES(cPacket, AccountNum, status);
+			SendPacket_UniCast(sessionID, cPacket);
+			return;
+		}
+
+		// 중복체크 성공
+		status = true;
+		(*cPacket)->Clear(sizeof(st_NetHeader));
+
+		mpDupcheckRES(cPacket, AccountNum, status);
+		SendPacket_UniCast(sessionID, cPacket);
+		return;
+	}
+	else if (type == en_PACKET_CS_TETRIS_REQ_DUPCHECK_NICKNAME)
+	{
+		bool nickPass = false;
+
+		// 닉네임 중복 체크 -> SELECT
+		SHS::DBTLSConnector* pDBConnector = SHS::DBTLSConnector::GetDBConnectorTLS();
+
+		LPVOID pAddr = pDBConnector->AllocJobAddress();
+		CDBRegister_Check_Nickname* pCDDupCheck = new(pAddr)CDBRegister_Check_Nickname;
+		pCDDupCheck->_AccountNum = AccountNum;
+		strcpy_s(pCDDupCheck->_Nickname, 20, Nickname);
+
+		pDBConnector->SendQuery_SELECT((IDBJob*)pCDDupCheck);
+		if (!pDBConnector->StoreQueryResult())
+		{
+			// 그냥 에러난거니까 디버그 브레이크 걸릴예정
+			Disconnect(sessionID);
+			return;
+		}
+
+		// SELECT 결과가 있다 -> 중복됨
+		if (pDBConnector->FetchQueryResult())
+		{
+			nickPass = false;
+		}
+		else
+		{
+			// Redis에 닉네임 검색 -> 누군가 중복 가입중인지 체크
+			cpp_redis::client& _redisClient = GetTLSRedisClient();
+			_redisClient.set_advanced("signup:nickname:" + std::string(Nickname), "1", true, 60, false, 0, true, false,
+				[&](cpp_redis::reply& reply) {
+					nickPass = !reply.is_null();
+				});
+
+			_redisClient.sync_commit();
+		}
+
+		if (!nickPass)
+		{
+			status = dfTETRIS_REGISTER_ERR_DUPLICATED;
+			// 실패 패킷 전송 준비
+			(*cPacket)->Clear(sizeof(st_NetHeader));
+
+			mpDupcheckRES(cPacket, AccountNum, status);
+			SendPacket_UniCast(sessionID, cPacket);
+			return;
+		}
+
+		// 중복체크 성공
+		status = true;
+		(*cPacket)->Clear(sizeof(st_NetHeader));
+
+		mpDupcheckRES(cPacket, AccountNum, status);
+		SendPacket_UniCast(sessionID, cPacket);
+		return;
+	}
+}
+
 
 void TetrisLoginServer::MessageProc_Login(RefCountPointer& cPacket, ULONGLONG sessionID)
 {
@@ -123,8 +336,6 @@ void TetrisLoginServer::MessageProc_Login(RefCountPointer& cPacket, ULONGLONG se
 
 		mpLoginRES(cPacket, AccountNo, status, NULL, NULL, NULL);
 		SendPacket_UniCast(sessionID, cPacket);
-
-		Disconnect(sessionID);
 		return;
 	}
 
@@ -146,8 +357,6 @@ void TetrisLoginServer::MessageProc_Login(RefCountPointer& cPacket, ULONGLONG se
 
 		mpLoginRES(cPacket, AccountNo, status, NULL, NULL, NULL);
 		SendPacket_UniCast(sessionID, cPacket);
-
-		Disconnect(sessionID);
 		return;
 	}
 
@@ -188,18 +397,6 @@ std::wstring TetrisLoginServer::GenerateSessionKey()
 	}
 	
 	return sessionKey;
-}
-
-void TetrisLoginServer::mpLoginRES(RefCountPointer& cPacket, INT64 accountNum, BYTE status, WCHAR* gameIP, USHORT gamePort, const WCHAR* sessionKey)
-{
-	(**cPacket) << (WORD)en_PACKET_CS_TETRIS_RES_LOGIN;
-	(**cPacket) << status;
-	(**cPacket) << accountNum;
-	
-
-	(*cPacket)->PutData((char*)gameIP, sizeof(WCHAR) * 16);
-	(**cPacket) << gamePort;
-	(*cPacket)->PutData((char*)sessionKey, sizeof(WCHAR) * 64);
 }
 
 void TetrisLoginServer::OnError(int errorcode, WCHAR* message)

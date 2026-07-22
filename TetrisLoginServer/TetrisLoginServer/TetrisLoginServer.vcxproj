@@ -135,6 +135,7 @@
     <ClCompile Include="NetServer.cpp" />
     <ClCompile Include="ProcademyProfiler.cpp" />
     <ClCompile Include="TetrisLoginServer.cpp" />
+    <ClCompile Include="TetrisLoginServer_MakePacket.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="CCrashDump.h" />

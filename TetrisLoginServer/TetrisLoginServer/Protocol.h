@@ -49,6 +49,34 @@ enum en_PACKET_TYPE
 	en_PACKET_CS_TETRIS_RES_REGISTER,
 
 	//------------------------------------------------------------
+	//  중복체크 요청
+	//
+	//	{
+	//		WORD	Type
+	//
+	//		INT64	AccountNo
+	//		WCHAR	ID[20]				// null 포함
+	//		WCHAR	Nickname[20]		// null 포함
+	//	}
+	//
+	//------------------------------------------------------------
+	en_PACKET_CS_TETRIS_REQ_DUPCHECK_ID,
+	en_PACKET_CS_TETRIS_REQ_DUPCHECK_NICKNAME,
+
+	//------------------------------------------------------------
+	//  중복체크 응답 - ID, Nick 공용
+	//
+	//	{
+	//		WORD	Type
+	//		
+	//		BYTE	Status				// 0:실패	1:성공
+	//		INT64	AccountNo
+	//	}
+	//
+	//------------------------------------------------------------
+	en_PACKET_CS_TETRIS_RES_DUPCHECK,
+
+	//------------------------------------------------------------
 	//  로그인 요청
 	//
 	//	{
@@ -245,4 +273,13 @@ enum en_PACKETTYPE_TETRIS_RES_LOGIN
 	dfTETRIS_LOGIN_ERR_ID = 3,				// ID 오류
 	dfTETRIS_LOGIN_ERR_PASSWD = 4,			// 패스워드 오류
 	dfTETRIS_LOGIN_ERR_SESSIONKEY = 5,		// 로그인 세션키 오류
+};
+
+enum en_PACKETTYPE_TETRIS_RES_REGISTER
+{
+	dfTETRIS_REGISTER_OK = 1,					// 가입 성공
+	dfTETRIS_REGISTER_ERR_NOSERVER = 2,		// 서버이름 오류 (매칭미스)
+	dfTETRIS_REGISTER_ERR_ID = 3,				// ID 오류
+	dfTETRIS_REGISTER_ERR_NICKNAME= 4,			// 닉네임 오류
+	dfTETRIS_REGISTER_ERR_DUPLICATED = 5,
 };

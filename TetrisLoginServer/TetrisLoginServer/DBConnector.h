@@ -42,7 +42,7 @@ namespace SHS
 
 		
 		// SELECT -> 직렬화 필요 x
-		bool SendQuery_SELECT(IDBJob* pJob)
+		int SendQuery_SELECT(IDBJob* pJob)
 		{
 			int query_stat;
 			std::ostringstream oss;
@@ -63,6 +63,30 @@ namespace SHS
 
 			//res = mysql_store_result(connection);
 			// 멀티문 결과 비우기
+			return true;
+		}
+
+		// INSERT -> 직렬화 필요 없는 경우
+		int SendQuery_INSERT(IDBJob* pJob)
+		{
+			int query_stat;
+			std::ostringstream oss;
+
+			pJob->Exec(oss);
+
+			std::string sql = oss.str();
+
+			query_stat = mysql_query(connection, sql.c_str());
+			if (query_stat != 0) {
+				int errNo = mysql_errno(connection);
+
+				printf("Mysql query error : %s", mysql_error(&conn));
+				return errNo;
+			}
+
+			pJob->~IDBJob();
+			_JobPool.Free((CDBPoolStruct*)pJob);
+
 			return true;
 		}
 
