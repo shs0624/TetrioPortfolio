@@ -5,6 +5,8 @@
 #include "errmsg.h"
 #include "DBQueryProtocol.h"
 
+#define MYSQL_MAX_PARAM 4
+
 namespace SHS
 {
 	class DBTLSConnector
@@ -40,49 +42,72 @@ namespace SHS
 			return (LPVOID)ptr;
 		}
 
-		
 		// SELECT -> 직렬화 필요 x
 		int SendQuery_SELECT(IDBJob* pJob)
 		{
-			int query_stat;
-			std::ostringstream oss;
+			MYSQL_STMT* stmt = mysql_stmt_init(connection);
+			if (!stmt) 
+			{ 
+				DebugBreak(); 
+				return false; 
+			}
 
-			pJob->Exec(oss);
-
-			std::string sql = oss.str();
-
-			// Select 쿼리문
-			query_stat = mysql_query(connection, sql.c_str());
-			if (query_stat != 0) {
-				printf("Mysql query error : %s", mysql_error(&conn));
+			const char* queryText = pJob->GetQueryText();
+			if (mysql_stmt_prepare(stmt, queryText, (unsigned long)strlen(queryText)) != 0)
+			{
+				printf("Mysql prepare error : %s\n", mysql_stmt_error(stmt));
+				mysql_stmt_close(stmt);
 				return false;
 			}
+
+			MYSQL_BIND paramBind[MYSQL_MAX_PARAM] = {};
+			pJob->BindParams(paramBind);
+			mysql_stmt_bind_param(stmt, paramBind);
+
+			if (mysql_stmt_execute(stmt) != 0)
+			{
+				printf("Mysql query error : %s\n", mysql_stmt_error(stmt));
+				mysql_stmt_close(stmt);
+				return false;
+			}
+
+			mysql_stmt_bind_result(stmt, _resultBind);
+
+			_currentStmt = stmt;
 
 			pJob->~IDBJob();
 			_JobPool.Free((CDBPoolStruct*)pJob);
 
-			//res = mysql_store_result(connection);
-			// 멀티문 결과 비우기
 			return true;
 		}
 
-		// INSERT -> 직렬화 필요 없는 경우
 		int SendQuery_INSERT(IDBJob* pJob)
 		{
-			int query_stat;
-			std::ostringstream oss;
+			MYSQL_STMT* stmt = mysql_stmt_init(connection);
+			if (!stmt) { DebugBreak(); return false; }
 
-			pJob->Exec(oss);
-
-			std::string sql = oss.str();
-
-			query_stat = mysql_query(connection, sql.c_str());
-			if (query_stat != 0) {
+			const char* queryText = pJob->GetQueryText();
+			if (mysql_stmt_prepare(stmt, queryText, (unsigned long)strlen(queryText)) != 0)
+			{
+				printf("Mysql prepare error : %s\n", mysql_stmt_error(stmt));
 				int errNo = mysql_errno(connection);
-
-				printf("Mysql query error : %s", mysql_error(&conn));
+				mysql_stmt_close(stmt);
 				return errNo;
 			}
+
+			MYSQL_BIND paramBind[MYSQL_MAX_PARAM] = {};
+			pJob->BindParams(paramBind);
+			mysql_stmt_bind_param(stmt, paramBind);
+
+			if (mysql_stmt_execute(stmt) != 0)
+			{
+				int errNo = mysql_errno(connection);   // 1062 (중복 키) 등은 그대로 감지 가능
+				printf("Mysql query error : %s\n", mysql_stmt_error(stmt));
+				mysql_stmt_close(stmt);
+				return errNo;
+			}
+
+			mysql_stmt_close(stmt);
 
 			pJob->~IDBJob();
 			_JobPool.Free((CDBPoolStruct*)pJob);
@@ -93,8 +118,15 @@ namespace SHS
 		// Fetch만 하는 것 결과는 따로 보기
 		bool FetchQueryResult()
 		{
-			sql_row = mysql_fetch_row(res);
-			if (sql_row == NULL)
+			int ret = mysql_stmt_fetch(_currentStmt);
+			if (ret == MYSQL_DATA_TRUNCATED)
+			{
+				// 데이터가 잘려 도착한 경우
+				DebugBreak();
+				return false;
+			}
+
+			if (ret != 0)
 				return false;
 
 			return true;
@@ -102,12 +134,8 @@ namespace SHS
 
 		bool StoreQueryResult()
 		{
-			int status = 0;
-			res = mysql_store_result(connection);
-			if (!res)
+			if (mysql_stmt_store_result(_currentStmt) != 0)
 			{
-				// INSERT/UPDATE는 NULL일 수 있지만 이 클래스는 SELECT 전용이니 무시
-				// NULL이면 에러다. 서버 종료
 				DebugBreak();
 				return false;
 			}
@@ -117,37 +145,25 @@ namespace SHS
 
 		void FreeQueryResult()
 		{
-			//int status = 0;
-			//do {
-			//	res = mysql_store_result(connection); // INSERT/COMMIT은 NULL이어도 OK
-			//	if (res) 
-			//		mysql_free_result(res);
-
-			//	status = mysql_next_result(connection);
-			//} while (status == 0);
-
-			//if (status > 0) { // -1이 아닌 경우 에러
-			//	printf("Mysql multi-result error : %s", mysql_error(&conn));
-			//	return false;
-			//}
-			//return true;
-			mysql_free_result(res);
+			mysql_stmt_free_result(_currentStmt);
+			mysql_stmt_close(_currentStmt);
+			_currentStmt = nullptr;
 		}
 
 		// 전부 UTF-16으로?
 		int GetInt(const int enColumn)
 		{
-			return atoi(sql_row[enColumn]);
+			return atoi(_resStr[enColumn]);
 		}
 
 		_int64 GetInt64(const int enColumn)
 		{
-			return _atoi64(sql_row[enColumn]);
+			return _atoi64(_resStr[enColumn]);
 		}
 
 		char* GetString(const int enColumn)
 		{
-			return sql_row[enColumn];
+			return _resStr[enColumn];
 		}
 
 	private:
@@ -162,6 +178,17 @@ namespace SHS
 				//int n = mysql_errno(NULL);
 				DebugBreak();
 			}
+
+			// MAX_RESULT_COLUMNS개의 문자열 슬롯을 한 번만 세팅
+			memset(_resultBind, 0, sizeof(_resultBind));
+			for (int i = 0; i < MYSQL_MAX_PARAM; ++i)
+			{
+				_resultBind[i].buffer_type = MYSQL_TYPE_STRING;
+				_resultBind[i].buffer = _resStr[i];
+				_resultBind[i].buffer_length = sizeof(_resStr[i]);
+				_resultBind[i].length = &_resStrLen[i];
+			}
+
 			connection = mysql_real_connect(sql, "127.0.0.1", "root", "shs0624@@", "accountdb", 3306, (char*)NULL, CLIENT_MULTI_STATEMENTS);
 			if (connection == NULL)
 			{
@@ -174,8 +201,12 @@ namespace SHS
 
 		MYSQL conn;
 		MYSQL* connection;
-		MYSQL_RES* res;
-		MYSQL_ROW sql_row;
+
+		MYSQL_STMT* _currentStmt;
+
+		MYSQL_BIND		_resultBind[MYSQL_MAX_PARAM];
+		char			_resStr[MYSQL_MAX_PARAM][128];
+		unsigned long	_resStrLen[MYSQL_MAX_PARAM];
 
 		static TLSMemoryPoolManager<CDBPoolStruct> _JobPool;
 	};
