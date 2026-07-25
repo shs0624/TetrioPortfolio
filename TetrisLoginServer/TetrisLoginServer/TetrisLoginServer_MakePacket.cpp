@@ -4,18 +4,16 @@
 #include "TetrisLoginServer.h"
 #include "Protocol.h"
 
-void TetrisLoginServer::mpDupcheckRES(RefCountPointer& cPacket, INT64 accountNum, BYTE status)
+void TetrisLoginServer::mpDupcheckRES(RefCountPointer& cPacket, BYTE status)
 {
 	(**cPacket) << (WORD)en_PACKET_CS_TETRIS_RES_REGISTER;
 	(**cPacket) << status;
-	(**cPacket) << accountNum;
 }
 
-void TetrisLoginServer::mpRegisterRES(RefCountPointer& cPacket, INT64 accountNum, BYTE status)
+void TetrisLoginServer::mpRegisterRES(RefCountPointer& cPacket, BYTE status)
 {
 	(**cPacket) << (WORD)en_PACKET_CS_TETRIS_RES_REGISTER;
 	(**cPacket) << status;
-	(**cPacket) << accountNum;
 }
 
 void TetrisLoginServer::mpLoginRES(RefCountPointer& cPacket, INT64 accountNum, BYTE status, WCHAR* gameIP, USHORT gamePort, const WCHAR* sessionKey)

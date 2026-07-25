@@ -26,7 +26,6 @@ enum en_PACKET_TYPE
 	//	{
 	//		WORD	Type
 	//
-	//		INT64	AccountNo
 	//		WCHAR	ID[20]				// null 포함
 	//		WCHAR	Passwd[20]			// null 포함
 	//		WCHAR	Nickname[20]		// null 포함
@@ -42,7 +41,6 @@ enum en_PACKET_TYPE
 	//		WORD	Type
 	//
 	//		BYTE	Status				// 0:실패	1:성공
-	//		INT64	AccountNo
 	//	}
 	//
 	//------------------------------------------------------------
@@ -54,7 +52,6 @@ enum en_PACKET_TYPE
 	//	{
 	//		WORD	Type
 	//
-	//		INT64	AccountNo
 	//		WCHAR	ID[20]				// null 포함
 	//		WCHAR	Nickname[20]		// null 포함
 	//	}
@@ -70,7 +67,6 @@ enum en_PACKET_TYPE
 	//		WORD	Type
 	//		
 	//		BYTE	Status				// 0:실패	1:성공
-	//		INT64	AccountNo
 	//	}
 	//
 	//------------------------------------------------------------
@@ -82,7 +78,6 @@ enum en_PACKET_TYPE
 	//	{
 	//		WORD	Type
 	//
-	//		INT64	AccountNo
 	//		WCHAR	ID[20]				// null 포함
 	//		WCHAR	Passwd[20]			// null 포함
 	//	}
@@ -97,7 +92,7 @@ enum en_PACKET_TYPE
 	//		WORD	Type
 	//
 	//		BYTE	Status				// 0:실패	1:성공
-	//		INT64	AccountNo
+	//		INT64	AccountNum
 	//		WCHAR	GameIP[16];
 	//		USHORT	GamePort;
 	// 
@@ -113,7 +108,7 @@ enum en_PACKET_TYPE
 	//	{
 	//		WORD	Type
 	//
-	//		INT64	AccountNo
+	//		INT64	AccountNum
 	//		WORD	SectorX
 	//		WORD	SectorY
 	//	}
@@ -128,7 +123,7 @@ enum en_PACKET_TYPE
 	//		WORD	Type
 	//
 	//		BYTE	Status				// 0:실패	1:성공
-	//		INT64	AccountNo
+	//		INT64	AccountNum
 	//	}
 	//
 	//------------------------------------------------------------
@@ -140,8 +135,8 @@ enum en_PACKET_TYPE
 	//	{
 	//		WORD	Type
 	//
-	//		INT64	AccountNo
-	//		INT64	OpAccountNo
+	//		INT64	AccountNum
+	//		INT64	OpAccountNum
 	//		WCHAR	OpNickname[20]	
 	//	}
 	//

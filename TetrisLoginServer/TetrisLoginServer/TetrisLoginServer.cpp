@@ -88,9 +88,7 @@ void TetrisLoginServer::OnRecv(ULONGLONG sessionID, RefCountPointer& cPacket)
 void TetrisLoginServer::MessageProc_Register(RefCountPointer& cPacket, ULONGLONG sessionID)
 {
 	BYTE status = 1;
-
-	INT64 AccountNum;
-	(**cPacket) >> AccountNum;
+	INT64 AccountNum = -1;
 
 	char ID[20];
 	(*cPacket)->GetData(ID, sizeof(ID));
@@ -124,7 +122,7 @@ void TetrisLoginServer::MessageProc_Register(RefCountPointer& cPacket, ULONGLONG
 		// 실패 패킷 전송 준비
 		(*cPacket)->Clear(sizeof(st_NetHeader));
 
-		mpRegisterRES(cPacket, AccountNum, status);
+		mpRegisterRES(cPacket, status);
 		SendPacket_UniCast(sessionID, cPacket);
 		return;
 	}
@@ -134,7 +132,6 @@ void TetrisLoginServer::MessageProc_Register(RefCountPointer& cPacket, ULONGLONG
 
 	LPVOID pAddr = pDBConnector->AllocJobAddress();
 	CDBRegister_Insert* pCDBRegister = new(pAddr)CDBRegister_Insert;
-	pCDBRegister->_AccountNum = AccountNum;
 	strcpy_s(pCDBRegister->_Nickname, 20, Nickname);
 	strcpy_s(pCDBRegister->_ID, 20, ID);
 	strcpy_s(pCDBRegister->_Passwd, 20, Passwd);
@@ -148,7 +145,7 @@ void TetrisLoginServer::MessageProc_Register(RefCountPointer& cPacket, ULONGLONG
 			// 실패 패킷 전송 준비
 			(*cPacket)->Clear(sizeof(st_NetHeader));
 
-			mpRegisterRES(cPacket, AccountNum, status);
+			mpRegisterRES(cPacket, status);
 			SendPacket_UniCast(sessionID, cPacket);
 			return;
 		}
@@ -157,10 +154,14 @@ void TetrisLoginServer::MessageProc_Register(RefCountPointer& cPacket, ULONGLONG
 		return;
 	}
 
+	_redisClient.del({ "signup:id:" + std::string(ID) });
+	_redisClient.del({ "signup:nickname:" + std::string(Nickname) });
+	_redisClient.sync_commit();
+
 	status = dfTETRIS_REGISTER_OK;
 	(*cPacket)->Clear(sizeof(st_NetHeader));
 
-	mpRegisterRES(cPacket, AccountNum, status);
+	mpRegisterRES(cPacket, status);
 	SendPacket_UniCast(sessionID, cPacket);
 	return;
 }
@@ -168,9 +169,6 @@ void TetrisLoginServer::MessageProc_Register(RefCountPointer& cPacket, ULONGLONG
 void TetrisLoginServer::MessageProc_Dupcheck(RefCountPointer& cPacket, WORD type, ULONGLONG sessionID)
 {
 	BYTE status = 1;
-
-	INT64 AccountNum;
-	(**cPacket) >> AccountNum;
 
 	char ID[20];
 	(*cPacket)->GetData(ID, sizeof(ID));
@@ -187,7 +185,6 @@ void TetrisLoginServer::MessageProc_Dupcheck(RefCountPointer& cPacket, WORD type
 
 		LPVOID pAddr = pDBConnector->AllocJobAddress();
 		CDBRegister_Check_ID* pCDDupCheck = new(pAddr)CDBRegister_Check_ID;
-		pCDDupCheck->_AccountNum = AccountNum;
 		strcpy_s(pCDDupCheck->_ID, 20, ID);
 
 		pDBConnector->SendQuery_SELECT((IDBJob*)pCDDupCheck);
@@ -221,7 +218,7 @@ void TetrisLoginServer::MessageProc_Dupcheck(RefCountPointer& cPacket, WORD type
 			// 실패 패킷 전송 준비
 			(*cPacket)->Clear(sizeof(st_NetHeader));
 
-			mpDupcheckRES(cPacket, AccountNum, status);
+			mpDupcheckRES(cPacket, status);
 			SendPacket_UniCast(sessionID, cPacket);
 			return;
 		}
@@ -230,7 +227,7 @@ void TetrisLoginServer::MessageProc_Dupcheck(RefCountPointer& cPacket, WORD type
 		status = true;
 		(*cPacket)->Clear(sizeof(st_NetHeader));
 
-		mpDupcheckRES(cPacket, AccountNum, status);
+		mpDupcheckRES(cPacket, status);
 		SendPacket_UniCast(sessionID, cPacket);
 		return;
 	}
@@ -243,7 +240,6 @@ void TetrisLoginServer::MessageProc_Dupcheck(RefCountPointer& cPacket, WORD type
 
 		LPVOID pAddr = pDBConnector->AllocJobAddress();
 		CDBRegister_Check_Nickname* pCDDupCheck = new(pAddr)CDBRegister_Check_Nickname;
-		pCDDupCheck->_AccountNum = AccountNum;
 		strcpy_s(pCDDupCheck->_Nickname, 20, Nickname);
 
 		pDBConnector->SendQuery_SELECT((IDBJob*)pCDDupCheck);
@@ -277,7 +273,7 @@ void TetrisLoginServer::MessageProc_Dupcheck(RefCountPointer& cPacket, WORD type
 			// 실패 패킷 전송 준비
 			(*cPacket)->Clear(sizeof(st_NetHeader));
 
-			mpDupcheckRES(cPacket, AccountNum, status);
+			mpDupcheckRES(cPacket, status);
 			SendPacket_UniCast(sessionID, cPacket);
 			return;
 		}
@@ -286,7 +282,7 @@ void TetrisLoginServer::MessageProc_Dupcheck(RefCountPointer& cPacket, WORD type
 		status = true;
 		(*cPacket)->Clear(sizeof(st_NetHeader));
 
-		mpDupcheckRES(cPacket, AccountNum, status);
+		mpDupcheckRES(cPacket, status);
 		SendPacket_UniCast(sessionID, cPacket);
 		return;
 	}
@@ -300,9 +296,7 @@ void TetrisLoginServer::MessageProc_Login(RefCountPointer& cPacket, ULONGLONG se
 	WCHAR clientAddr[16];
 
 	BYTE status = 1;
-
-	INT64 AccountNo;
-	(**cPacket) >> AccountNo;
+	INT64 AccountNum = 0;
 
 	char ID[20];
 	(*cPacket)->GetData(ID, sizeof(ID));
@@ -315,9 +309,7 @@ void TetrisLoginServer::MessageProc_Login(RefCountPointer& cPacket, ULONGLONG se
 
 	LPVOID pAddr = pDBConnector->AllocJobAddress();
 	CDBLogin* pCDBLogin = new(pAddr)CDBLogin;
-	pCDBLogin->_AccountNum = AccountNo;
 	strcpy_s(pCDBLogin->_ID, 20, ID);
-	strcpy_s(pCDBLogin->_Passwd, 20, Passwd);
 
 	pDBConnector->SendQuery_SELECT((IDBJob*)pCDBLogin);
 	if (!pDBConnector->StoreQueryResult())
@@ -334,7 +326,7 @@ void TetrisLoginServer::MessageProc_Login(RefCountPointer& cPacket, ULONGLONG se
 		// 실패 패킷 전송 준비
 		(*cPacket)->Clear(sizeof(st_NetHeader));
 
-		mpLoginRES(cPacket, AccountNo, status, NULL, NULL, NULL);
+		mpLoginRES(cPacket, AccountNum, status, NULL, NULL, NULL);
 		SendPacket_UniCast(sessionID, cPacket);
 		return;
 	}
@@ -343,6 +335,8 @@ void TetrisLoginServer::MessageProc_Login(RefCountPointer& cPacket, ULONGLONG se
 	std::wstring wsessionKey = GenerateSessionKey();
 
 	std::string sessionKey = WstrToStr(wsessionKey);
+
+	AccountNum = pDBConnector->GetInt64(_enAccountNum);
 	std::string passwd = pDBConnector->GetString(_enPasswd);
 	std::string nickname(pDBConnector->GetString(_enNickname));
 
@@ -355,15 +349,17 @@ void TetrisLoginServer::MessageProc_Login(RefCountPointer& cPacket, ULONGLONG se
 		// 실패 패킷 전송 준비
 		(*cPacket)->Clear(sizeof(st_NetHeader));
 
-		mpLoginRES(cPacket, AccountNo, status, NULL, NULL, NULL);
+		mpLoginRES(cPacket, AccountNum, status, NULL, NULL, NULL);
 		SendPacket_UniCast(sessionID, cPacket);
 		return;
 	}
 
 	// Redis에 넣기.
 	cpp_redis::client& _redisClient = GetTLSRedisClient();
-	_redisClient.hset(std::to_string(AccountNo), "SessionKey", sessionKey);
-	_redisClient.hset(std::to_string(AccountNo), "Nickname", nickname);
+	_redisClient.hset(std::to_string(AccountNum), "SessionKey", sessionKey);
+	_redisClient.hset(std::to_string(AccountNum), "Nickname", nickname);
+
+	_redisClient.expire(std::to_string(AccountNum), 60); // 1시간 뒤 키 전체 만료
 	_redisClient.sync_commit();
 
 	// 패킷 전송 준비
@@ -375,7 +371,7 @@ void TetrisLoginServer::MessageProc_Login(RefCountPointer& cPacket, ULONGLONG se
 
 	status = dfTETRIS_LOGIN_OK;
 
-	mpLoginRES(cPacket, AccountNo, status, gameServerIP, (USHORT)dfGAMESERVER_PORT,
+	mpLoginRES(cPacket, AccountNum, status, gameServerIP, (USHORT)dfGAMESERVER_PORT,
 		wsessionKey.c_str());
 
 	SendPacket_UniCast(sessionID, cPacket);

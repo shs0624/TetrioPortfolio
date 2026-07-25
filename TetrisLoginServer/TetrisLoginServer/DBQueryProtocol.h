@@ -53,9 +53,7 @@ public:
 		bind[0].length = &_IDLen;
 	}
 
-	_int64 _AccountNum;
 	char _ID[20];
-	char _Passwd[20];
 	//char _SessionKey[64];
 
 	unsigned long _IDLen;
@@ -86,7 +84,6 @@ public:
 		bind[0].length = &_IDLen;
 	}
 
-	_int64 _AccountNum;
 	char _ID[20];
 	unsigned long _IDLen;
 };
@@ -116,7 +113,6 @@ public:
 		bind[0].length = &_NickLen;
 	}
 
-	_int64 _AccountNum;
 	char _Nickname[20];
 	unsigned long _NickLen;
 };
@@ -126,12 +122,12 @@ class CDBRegister_Insert : public IDBJob
 public:
 	const char* GetQueryText() const override
 	{
-		return "INSERT INTO accountdb (accountnum, id, passwd, nickname) VALUES (?, ?, ?, ?)";
+		return "INSERT INTO accountdb (id, passwd, nickname) VALUES (?, ?, ?)";
 	}
 
 	int GetParamCount() const override
 	{
-		return 4;
+		return 3;
 	}
 
 	void BindParams(MYSQL_BIND* bind) override
@@ -142,26 +138,22 @@ public:
 		_PasswdLen = (unsigned long)strlen(_Passwd);
 		_NickLen = (unsigned long)strlen(_Nickname);
 
-		bind[0].buffer_type = MYSQL_TYPE_LONGLONG;
-		bind[0].buffer = &_AccountNum;
+		bind[0].buffer_type = MYSQL_TYPE_STRING;
+		bind[0].buffer = _ID;
+		bind[0].buffer_length = sizeof(_ID);
+		bind[0].length = &_IDLen;
 
 		bind[1].buffer_type = MYSQL_TYPE_STRING;
-		bind[1].buffer = _ID;
-		bind[1].buffer_length = sizeof(_ID);
-		bind[1].length = &_IDLen;
+		bind[1].buffer = _Passwd;
+		bind[1].buffer_length = sizeof(_Passwd);
+		bind[1].length = &_PasswdLen;
 
 		bind[2].buffer_type = MYSQL_TYPE_STRING;
-		bind[2].buffer = _Passwd;
-		bind[2].buffer_length = sizeof(_Passwd);
-		bind[2].length = &_PasswdLen;
-
-		bind[3].buffer_type = MYSQL_TYPE_STRING;
-		bind[3].buffer = _Nickname;
-		bind[3].buffer_length = sizeof(_Nickname);
-		bind[3].length = &_NickLen;
+		bind[2].buffer = _Nickname;
+		bind[2].buffer_length = sizeof(_Nickname);
+		bind[2].length = &_NickLen;
 	}
 
-	_int64 _AccountNum;
 	char _ID[20];
 	char _Passwd[20];
 	char _Nickname[20];

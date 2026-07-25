@@ -464,8 +464,8 @@ bool CNetServer::RecvProc_Net(st_NetSession* ptr, DWORD cbTransferred)
 			}
 
 			len = ((st_NetHeader*)((*csPacket)->GetBufferPtr()))->shLen;
-			//if (len < 0 || len > PROTOCOL_MAX_SIZE) {
-			if (len < 0) {
+			if (len < 0 || len > PROTOCOL_MAX_SIZE) 
+			{
 				Disconnect(ptr->ulSessionID);
 				if (!csPacket.DecRefCount())
 					_pLog._dwPacketPoolUse--;
