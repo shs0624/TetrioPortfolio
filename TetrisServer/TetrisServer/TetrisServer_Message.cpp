@@ -6,31 +6,32 @@
 void TetrisServer::MessageProc_Login(ULONGLONG sessionID, ULONGLONG accountNum, RefCountPointer& cPacket)
 {
 	BYTE status = FALSE;
-	WCHAR tempID[20];
-	WCHAR tempPasswd[20];
+	WCHAR Nickname[20];
 	CHAR tempSessionKey[64];
 
-	(*cPacket)->GetData((char*)tempID, sizeof(tempID));
-	(*cPacket)->GetData((char*)tempPasswd, sizeof(tempPasswd));
 	(*cPacket)->GetData((char*)tempSessionKey, sizeof(tempSessionKey));
 
 	// Redis 검증
 	cpp_redis::client& _redisClient = GetTLSRedisClient();
-	cpp_redis::reply reply;
+	cpp_redis::reply reply_SessionKey;
+	cpp_redis::reply reply_Nickname;
 
 	// future가 error가 나올 수 있어 try catch 시도
 	try {
 		// future_error 가능
-		auto fut = _redisClient.get(std::to_string(accountNum));
+		auto fut_key = _redisClient.hget(std::to_string(accountNum), "SessionKey");
+		auto fut_nick = _redisClient.hget(std::to_string(accountNum), "Nickname");
 		_redisClient.sync_commit();
-		reply = fut.get();
+
+		reply_SessionKey = fut_key.get();
+		reply_Nickname = fut_nick.get();
 	}
 	catch (const std::exception& e) {
 		// Redis 통신 실패 처리
 		_redisClient.disconnect();
 
 		(*cPacket)->Clear(sizeof(st_NetHeader));
-		mpRESLogin(cPacket, status, accountNum);
+		mpRESLogin(cPacket, status);
 		SendPacket_UniCast(sessionID, cPacket);
 
 		_pLog._dwRedisCertificationFailTotal++;
@@ -38,11 +39,40 @@ void TetrisServer::MessageProc_Login(ULONGLONG sessionID, ULONGLONG accountNum, 
 		return;
 	}
 
-	if (!reply.is_string())
+	if (!reply_SessionKey.is_string() || !reply_Nickname.is_string())
 	{
 		// 검증 실패
 		(*cPacket)->Clear(sizeof(st_NetHeader));
-		mpRESLogin(cPacket, status, accountNum);
+		mpRESLogin(cPacket, status);
+		SendPacket_UniCast(sessionID, cPacket);
+
+		_pLog._dwRedisCertificationFailTotal++;
+		Disconnect(sessionID);
+		return;
+	}
+
+	// 보낸 세션키와 레디스에 꺼낸 세션키 비교
+	if (reply_SessionKey.as_string().compare(0, 64, tempSessionKey, 64) != 0)
+	{
+		// 검증 실패
+		(*cPacket)->Clear(sizeof(st_NetHeader));
+		mpRESLogin(cPacket, status);
+		SendPacket_UniCast(sessionID, cPacket);
+
+		_pLog._dwRedisCertificationFailTotal++;
+		Disconnect(sessionID);
+		return;
+	}
+	
+	// 닉네임도 Redis에서
+	int result = MultiByteToWideChar(CP_UTF8, 0, reply_Nickname.as_string().c_str(), -1,
+		Nickname, _countof(Nickname));
+	
+	if (result <= 0)
+	{
+		// 검증 실패
+		(*cPacket)->Clear(sizeof(st_NetHeader));
+		mpRESLogin(cPacket, status);
 		SendPacket_UniCast(sessionID, cPacket);
 
 		_pLog._dwRedisCertificationFailTotal++;
@@ -90,8 +120,8 @@ void TetrisServer::MessageProc_Login(ULONGLONG sessionID, ULONGLONG accountNum, 
 	userPtr->AccountNum = accountNum;
 	userPtr->dwLastRecvTime = timeGetTime();
 	userPtr->bBatched = FALSE;
-	wcsncpy_s(userPtr->ID, tempID, sizeof(WCHAR) * 20);
-	// 닉네임도 Redis에서
-	//wcsncpy_s(userPtr->NickName, tempN, sizeof(WCHAR) * 20);
 	memcpy_s(userPtr->SessionKey, sizeof(userPtr->SessionKey), tempSessionKey, sizeof(tempSessionKey));
+	//wcsncpy_s(userPtr->ID, tempID, sizeof(WCHAR) * 20);
+	wcsncpy_s(userPtr->NickName, Nickname, _TRUNCATE);
+	
 }

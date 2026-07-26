@@ -70,7 +70,7 @@ public:
 private:
 	cpp_redis::client& GetTLSRedisClient();
 
-	void mpRESLogin(RefCountPointer& cPacket, BYTE status, INT64 accountNum);
+	void mpRESLogin(RefCountPointer& cPacket, BYTE status);
 
 	procademy::CMemoryPool_LockFree<st_USER>* _UserPool;
 	procademy::CMemoryPool_LockFree<st_SESSION>* _SessionPool;

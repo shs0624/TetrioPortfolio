@@ -52,7 +52,7 @@ void TetrisServer::OnRecv(ULONGLONG sessionID, RefCountPointer& cPacket)
 	// enum에 따라 다른 메세지 처리
 	switch ((en_PACKET_TYPE)type)
 	{
-	case en_PACKET_CS_TETRIS_REQ_LOGIN:
+	case en_PACKET_CS_TETRISLOGIN_REQ_LOGIN:
 		MessageProc_Login(sessionID, AccountNo, cPacket);
 		break;
 	}
