@@ -21,6 +21,7 @@ void TetrisServer::MessageProc_Login(ULONGLONG sessionID, ULONGLONG accountNum, 
 		// future_error 가능
 		auto fut_key = _redisClient.hget(std::to_string(accountNum), "SessionKey");
 		auto fut_nick = _redisClient.hget(std::to_string(accountNum), "Nickname");
+
 		_redisClient.sync_commit();
 
 		reply_SessionKey = fut_key.get();
@@ -124,4 +125,27 @@ void TetrisServer::MessageProc_Login(ULONGLONG sessionID, ULONGLONG accountNum, 
 	//wcsncpy_s(userPtr->ID, tempID, sizeof(WCHAR) * 20);
 	wcsncpy_s(userPtr->NickName, Nickname, _TRUNCATE);
 	
+	// 채팅 서버로의 입장
+	InterlockedExchange((LONG*)&(userPtr->enServerState), en_SERVER_CHAT);
+
+	// 채팅 서버에 있는 유저들에게 전체 메세지
+	(*cPacket)->Clear(sizeof(st_NetHeader));
+	mpACKChatEnter(cPacket, accountNum, Nickname);
+
+	AcquireSRWLockExclusive(&_ChatDataLock);
+	for (int i = 0; i < _ChatUserVec.size(); i++)
+	{
+		SendPacket_UniCast(_ChatUserVec[i]->ulSessionID, cPacket);
+	}
+
+	int idx = _ChatUserVec.size();
+	_ChatUserVec.push_back(userPtr);
+	_ChatUserIndexMap[userPtr->ulSessionID] = idx;
+
+	ReleaseSRWLockExclusive(&_ChatDataLock);
+}
+
+void TetrisServer::MessageProc_ChatMessage(ULONGLONG sessionID, ULONGLONG accountNum, RefCountPointer& cPacket)
+{
+
 }

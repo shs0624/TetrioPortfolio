@@ -1,5 +1,13 @@
 #pragma once
 
+enum en_SERVER
+{
+	None,
+	en_SERVER_CHAT,
+	en_SERVER_MATCHING,
+	en_SERVER_GAME
+};
+
 // 로그인 하지 않은 세션
 struct st_SESSION
 {
@@ -20,6 +28,9 @@ struct st_USER
 	WCHAR ID[20];
 	WCHAR NickName[20];
 	char SessionKey[64];
+
+	// 속한 서버 구분용
+	en_SERVER enServerState;
 
 	// 타임아웃용 시간
 	DWORD dwLastRecvTime;
@@ -61,6 +72,7 @@ public:
 	}
 
 	void MessageProc_Login(ULONGLONG sessionID, ULONGLONG accountNum, RefCountPointer& cPacket);
+	void MessageProc_ChatMessage(ULONGLONG sessionID, ULONGLONG accountNum, RefCountPointer& cPacket);
 
 	//virtual bool OnConnectionRequest(ULONG ip, LONG port);
 	virtual bool OnAccept(ULONGLONG sessionID, SOCKADDR_IN clientAddr);
@@ -71,6 +83,9 @@ private:
 	cpp_redis::client& GetTLSRedisClient();
 
 	void mpRESLogin(RefCountPointer& cPacket, BYTE status);
+	void mpACKChatEnter(RefCountPointer& cPacket, INT64 accountNum, WCHAR* nickname);
+	void mpACKChatExit(RefCountPointer& cPacket, INT64 accountNum, WCHAR* nickname);
+
 
 	procademy::CMemoryPool_LockFree<st_USER>* _UserPool;
 	procademy::CMemoryPool_LockFree<st_SESSION>* _SessionPool;
@@ -86,6 +101,11 @@ private:
 	// SessionID, 세션 구조체
 	unordered_map<ULONGLONG, st_SESSION*> _SessionMap;
 	SRWLOCK _SessionMapLock;
+
+	// 벡터(세션 ID, 인덱스) 와 map으로 동시에 저장 -> 벡터는 swap, pop_back으로 삭제 O(1) 만들기.
+	vector<st_USER*> _ChatUserVec;
+	unordered_map<ULONGLONG, int> _ChatUserIndexMap;
+	SRWLOCK _ChatDataLock;
 
 	const char _FixedKey = 0x32;
 	const char _ProgramKey = 0x77;

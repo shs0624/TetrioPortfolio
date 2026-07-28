@@ -1,5 +1,3 @@
-//#ifndef __GODDAMNBUG_ONLINE_PROTOCOL__
-//#define __GODDAMNBUG_ONLINE_PROTOCOL__
 #pragma once
 #define CHATSERVERNUM 10
 #define LOGINSERVERNUM 11
@@ -129,11 +127,36 @@ enum en_PACKET_TYPE
 	//	}
 	//
 	//------------------------------------------------------------
-	en_PACKET_CS_TETRIS_RES_LOGIN
+	en_PACKET_CS_TETRIS_RES_LOGIN,
 
-	
 	//------------------------------------------------------------
-	// 매칭 신청 요청
+	//  채팅 서버 입장
+	//
+	//	{
+	//		WORD	Type
+	//
+	//		INT64	AccountNum
+	//		WCHAR	Nickname[20]
+	//	}
+	//
+	//------------------------------------------------------------
+	en_PACKET_CS_TETRIS_ACK_CHAT_ENTER,
+
+	//------------------------------------------------------------
+	//  채팅 서버 퇴장
+	//
+	//	{
+	//		WORD	Type
+	//
+	//		INT64	AccountNum
+	//		WCHAR	Nickname[20]
+	//	}
+	//
+	//------------------------------------------------------------
+	en_PACKET_CS_TETRIS_ACK_CHAT_ENTER,
+
+	//------------------------------------------------------------
+	//	채팅 서버 퇴장
 	//
 	//	{
 	//		WORD	Type
@@ -144,7 +167,36 @@ enum en_PACKET_TYPE
 	//	}
 	//
 	//------------------------------------------------------------
-	en_PACKET_CS_TETRIS_REQ_MATCHING,
+	en_PACKET_CS_TETRIS_ACK_CHAT_EXIT,
+
+	//------------------------------------------------------------
+	//	채팅 서버 메세지 보내기
+	//
+	//	{
+	//		WORD	Type
+	//
+	//		INT64	AccountNum
+	//		WORD	MessageLen
+	//		WCHAR	Message[Len / 2]
+	//	}
+	//
+	//------------------------------------------------------------
+	en_PACKET_CS_TETRIS_REQ_CHAT_MESSAGE,
+
+	//------------------------------------------------------------
+	//	채팅 서버 메세지 도착
+	//
+	//	{
+	//		WORD	Type
+	//		INT64	AccountNum
+	//		WCHAR	Nickname[20]
+	//		
+	//		WORD	MessageLen
+	//		WCHAR	Message[Len / 2]
+	//	}
+	//
+	//------------------------------------------------------------
+	en_PACKET_CS_TETRIS_RES_CHAT_MESSAGE,
 
 	//------------------------------------------------------------
 	// 매칭 신청 응답

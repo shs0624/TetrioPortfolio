@@ -67,14 +67,14 @@ void TetrisLoginServer::OnRecv(ULONGLONG sessionID, RefCountPointer& cPacket)
 
 	switch (type)
 	{
-	case en_PACKET_CS_TETRIS_REQ_DUPCHECK_ID:
-	case en_PACKET_CS_TETRIS_REQ_DUPCHECK_NICKNAME:
+	case en_PACKET_CS_TETRISLOGIN_REQ_DUPCHECK_ID:
+	case en_PACKET_CS_TETRISLOGIN_REQ_DUPCHECK_NICKNAME:
 		MessageProc_Dupcheck(cPacket, type, sessionID);
 		break;
-	case en_PACKET_CS_TETRIS_REQ_REGISTER:
+	case en_PACKET_CS_TETRISLOGIN_REQ_REGISTER:
 		MessageProc_Register(cPacket, sessionID);
 		break;
-	case en_PACKET_CS_TETRIS_REQ_LOGIN:
+	case en_PACKET_CS_TETRISLOGIN_REQ_LOGIN:
 		MessageProc_Login(cPacket, sessionID);
 		break;
 	default:
@@ -176,7 +176,7 @@ void TetrisLoginServer::MessageProc_Dupcheck(RefCountPointer& cPacket, WORD type
 	char Nickname[20];
 	(*cPacket)->GetData(Nickname, sizeof(Nickname));
 
-	if (type == en_PACKET_CS_TETRIS_REQ_DUPCHECK_ID)
+	if (type == en_PACKET_CS_TETRISLOGIN_REQ_DUPCHECK_ID)
 	{
 		bool idPass = false;
 
@@ -231,7 +231,7 @@ void TetrisLoginServer::MessageProc_Dupcheck(RefCountPointer& cPacket, WORD type
 		SendPacket_UniCast(sessionID, cPacket);
 		return;
 	}
-	else if (type == en_PACKET_CS_TETRIS_REQ_DUPCHECK_NICKNAME)
+	else if (type == en_PACKET_CS_TETRISLOGIN_REQ_DUPCHECK_NICKNAME)
 	{
 		bool nickPass = false;
 
@@ -359,7 +359,7 @@ void TetrisLoginServer::MessageProc_Login(RefCountPointer& cPacket, ULONGLONG se
 	_redisClient.hset(std::to_string(AccountNum), "SessionKey", sessionKey);
 	_redisClient.hset(std::to_string(AccountNum), "Nickname", nickname);
 
-	_redisClient.expire(std::to_string(AccountNum), 60); // 1시간 뒤 키 전체 만료
+	_redisClient.expire(std::to_string(AccountNum), 60);
 	_redisClient.sync_commit();
 
 	// 패킷 전송 준비
