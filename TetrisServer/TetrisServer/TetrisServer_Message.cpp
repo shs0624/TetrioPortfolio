@@ -3,11 +3,14 @@
 #include "NetServer.h"
 #include "TetrisServer.h"
 
-void TetrisServer::MessageProc_Login(ULONGLONG sessionID, ULONGLONG accountNum, RefCountPointer& cPacket)
+void TetrisServer::MessageProc_Login(ULONGLONG sessionID, RefCountPointer& cPacket)
 {
+	INT64 accountNum;
 	BYTE status = FALSE;
 	WCHAR Nickname[20];
 	CHAR tempSessionKey[64];
+
+	(**cPacket) >> accountNum;
 
 	(*cPacket)->GetData((char*)tempSessionKey, sizeof(tempSessionKey));
 
@@ -88,8 +91,9 @@ void TetrisServer::MessageProc_Login(ULONGLONG sessionID, ULONGLONG accountNum, 
 	auto it = _UserMap.find(sessionID);
 	if (it != _UserMap.end())
 	{
-		// 이미 로그인 한 세션이니까, 메세지 취소하고 디스커넥트
-		ReleaseSRWLockShared(&_UserMapLock);
+		ReleaseSRWLockExclusive(&_UserMapLock);
+
+		// 이미 로그인 한 세션이니까, 메세지 취소하고 디스커넥트;
 		if (!cPacket.DecRefCount())
 			_pLog._dwPacketPoolUse--;
 
@@ -97,7 +101,7 @@ void TetrisServer::MessageProc_Login(ULONGLONG sessionID, ULONGLONG accountNum, 
 		return;
 	}
 	else
-		ReleaseSRWLockShared(&_UserMapLock);
+		ReleaseSRWLockExclusive(&_UserMapLock);
 
 	AcquireSRWLockExclusive(&_AccountNumUserMapLock);
 	it = _AccountNumUserMap.find(accountNum);
@@ -124,28 +128,106 @@ void TetrisServer::MessageProc_Login(ULONGLONG sessionID, ULONGLONG accountNum, 
 	memcpy_s(userPtr->SessionKey, sizeof(userPtr->SessionKey), tempSessionKey, sizeof(tempSessionKey));
 	//wcsncpy_s(userPtr->ID, tempID, sizeof(WCHAR) * 20);
 	wcsncpy_s(userPtr->NickName, Nickname, _TRUNCATE);
+
+	AcquireSRWLockExclusive(&_UserMapLock);
+	_UserMap[userPtr->ulSessionID] = userPtr;
+	ReleaseSRWLockExclusive(&_UserMapLock);
+
+	AcquireSRWLockExclusive(&_AccountNumUserMapLock);
+	_AccountNumUserMap[userPtr->AccountNum] = userPtr;
+	ReleaseSRWLockExclusive(&_AccountNumUserMapLock);
+
+	// 로그인 성공 RES 보내기
+	(*cPacket)->Clear(sizeof(st_NetHeader));
+	mpRESLogin(cPacket, status);
+	SendPacket_UniCast(sessionID, cPacket);
 	
 	// 채팅 서버로의 입장
 	InterlockedExchange((LONG*)&(userPtr->enServerState), en_SERVER_CHAT);
 
-	// 채팅 서버에 있는 유저들에게 전체 메세지
-	(*cPacket)->Clear(sizeof(st_NetHeader));
-	mpACKChatEnter(cPacket, accountNum, Nickname);
+	// 채팅 벡터 내의 유저들 모두에게 채팅 메세지 전달
+	// 하나의 패킷을 여러 유저에게 보내는 방식
+	RefCountPointer chatEnterPacket = RefCountPointer::MakeSharedPtr();
+	(*chatEnterPacket)->Clear(sizeof(st_NetHeader));
+	mpACKChatEnter(chatEnterPacket, accountNum, Nickname);
+	MakePacketHeader(chatEnterPacket);
 
 	AcquireSRWLockExclusive(&_ChatDataLock);
 	for (int i = 0; i < _ChatUserVec.size(); i++)
 	{
-		SendPacket_UniCast(_ChatUserVec[i]->ulSessionID, cPacket);
+		chatEnterPacket.IncRefCount();
+		SendPacket_UniCast(_ChatUserVec[i]->ulSessionID, chatEnterPacket, false);
 	}
 
 	int idx = _ChatUserVec.size();
 	_ChatUserVec.push_back(userPtr);
-	_ChatUserIndexMap[userPtr->ulSessionID] = idx;
-
+	_ChatUserIndexMap[userPtr->AccountNum] = idx;
 	ReleaseSRWLockExclusive(&_ChatDataLock);
+
+	_pLog._dwLoginMessageTPS++;
 }
 
-void TetrisServer::MessageProc_ChatMessage(ULONGLONG sessionID, ULONGLONG accountNum, RefCountPointer& cPacket)
+void TetrisServer::MessageProc_ChatMessage(ULONGLONG sessionID, RefCountPointer& cPacket)
 {
+	static const int _MaxMessageLen = 100;
 
+	INT64 accountNum;
+
+	// 최대 제한은 100글자로 두자.
+	WORD messageLen;
+	WCHAR message[128];
+
+	(**cPacket) >> messageLen;
+	messageLen = min(messageLen, _MaxMessageLen);
+
+	int copyLen = (*cPacket)->GetData((char*)message, sizeof(WCHAR) * messageLen);
+	if (copyLen != sizeof(WCHAR) * messageLen)
+	{
+		if (!cPacket.DecRefCount())
+			_pLog._dwPacketPoolUse--;
+
+		Disconnect(sessionID);
+		return;
+	}
+
+	// 채팅 보낸 유저 정보 찾기 -> 채팅을 보내고 서버를 이동하진 않았을거라 가정
+	WCHAR nickname[20];
+
+	AcquireSRWLockShared(&_UserMapLock);
+	auto it = _UserMap.find(sessionID);
+	if (it == _UserMap.end())
+	{
+		ReleaseSRWLockShared(&_UserMapLock);
+		if (!cPacket.DecRefCount())
+			_pLog._dwPacketPoolUse--;
+
+		Disconnect(sessionID);
+		return;
+	}
+
+	st_USER* userPtr = (*it).second;
+	wcsncpy_s(nickname, userPtr->NickName, _TRUNCATE);
+	accountNum = userPtr->AccountNum;
+	ReleaseSRWLockShared(&_UserMapLock);
+
+	// 채팅 벡터 내의 유저들 모두에게 채팅 메세지 전달
+	// 하나의 패킷을 여러 유저에게 보내는 방식
+	(*cPacket)->Clear(sizeof(st_NetHeader));
+	mpRESChatMessage(cPacket, accountNum, nickname, messageLen, message);
+	MakePacketHeader(cPacket);
+
+	AcquireSRWLockExclusive(&_ChatDataLock);
+	// 자기 자신도 포함해서 RES를 보낼 것
+	for (int i = 0; i < _ChatUserVec.size(); i++)
+	{
+		cPacket.IncRefCount();
+		SendPacket_UniCast(_ChatUserVec[i]->ulSessionID, cPacket, false);
+	}
+	ReleaseSRWLockExclusive(&_ChatDataLock);
+
+	// 자신 포함해서 다 보냈으니 1을 줄여야 짝이 맞는다.
+	if (!cPacket.DecRefCount())
+		_pLog._dwPacketPoolUse--;
+
+	_pLog._dwChatMessageTPS++;
 }

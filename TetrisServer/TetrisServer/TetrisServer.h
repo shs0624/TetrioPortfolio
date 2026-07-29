@@ -71,8 +71,8 @@ public:
 		CNetServer::QuitServer();
 	}
 
-	void MessageProc_Login(ULONGLONG sessionID, ULONGLONG accountNum, RefCountPointer& cPacket);
-	void MessageProc_ChatMessage(ULONGLONG sessionID, ULONGLONG accountNum, RefCountPointer& cPacket);
+	void MessageProc_Login(ULONGLONG sessionID, RefCountPointer& cPacket);
+	void MessageProc_ChatMessage(ULONGLONG sessionID, RefCountPointer& cPacket);
 
 	//virtual bool OnConnectionRequest(ULONG ip, LONG port);
 	virtual bool OnAccept(ULONGLONG sessionID, SOCKADDR_IN clientAddr);
@@ -83,6 +83,7 @@ private:
 	cpp_redis::client& GetTLSRedisClient();
 
 	void mpRESLogin(RefCountPointer& cPacket, BYTE status);
+	void mpRESChatMessage(RefCountPointer& cPacket, INT64 accountNum, WCHAR* nickname, WORD messageLen, WCHAR* message);
 	void mpACKChatEnter(RefCountPointer& cPacket, INT64 accountNum, WCHAR* nickname);
 	void mpACKChatExit(RefCountPointer& cPacket, INT64 accountNum, WCHAR* nickname);
 

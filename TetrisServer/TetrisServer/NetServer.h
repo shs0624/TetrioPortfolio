@@ -60,6 +60,8 @@ public:
 	bool Disconnect(ULONGLONG sessionID);
 	bool GetClientAddr(ULONGLONG sessionID, WCHAR* buffer, int len);
 
+	bool MakePacketHeader(RefCountPointer& cPacket);
+
 	bool SendPost(ULONGLONG sessionID);
 	bool EnqueueSendBuffer(ULONGLONG sessionID, RefCountPointer& cPacket, bool pushHeader = true);
 	bool PostPacket(ULONGLONG sessionID, RefCountPointer& cPacket, bool pushHeader = true);

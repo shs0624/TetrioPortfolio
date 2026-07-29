@@ -573,6 +573,19 @@ void CNetServer::PostRelease(st_NetSession* ptr)
 	PostQueuedCompletionStatus(_NetIOCPHandle, 0, (ULONG_PTR)ptr, &_ReleaseOverlapped);
 }
 
+bool CNetServer::MakePacketHeader(RefCountPointer& cPacket)
+{
+	short shSize = (*cPacket)->GetDataSize();
+
+	st_NetHeader netHeader;
+	netHeader.FixedKey = _ProgramKey;
+	netHeader.RandKey = (unsigned char)rand() % 256;
+	netHeader.shLen = shSize;
+
+	(*cPacket)->PushHeader((char*)&netHeader, sizeof(st_NetHeader));
+	(*cPacket)->Encode(_FixedKey, netHeader.RandKey);
+}
+
 bool CNetServer::SendPacket_UniCast(ULONGLONG sessionID, RefCountPointer& cPacket, bool pushHeader)
 {
 	st_NetSession* ptr;
@@ -615,15 +628,7 @@ bool CNetServer::SendPacket_UniCast(ULONGLONG sessionID, RefCountPointer& cPacke
 
 	if (pushHeader)
 	{
-		short shSize = (*cPacket)->GetDataSize();
-
-		st_NetHeader netHeader;
-		netHeader.FixedKey = _ProgramKey;
-		netHeader.RandKey = (unsigned char)rand() % 256;
-		netHeader.shLen = shSize;
-
-		(*cPacket)->PushHeader((char*)&netHeader, sizeof(st_NetHeader));
-		(*cPacket)->Encode(_FixedKey, netHeader.RandKey);
+		MakePacketHeader(cPacket);
 	}
 
 	//cPacket.IncRefCount();

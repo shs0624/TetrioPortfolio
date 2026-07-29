@@ -188,7 +188,6 @@ enum en_PACKET_TYPE
 	//
 	//	{
 	//		WORD	Type
-	//		INT64	AccountNum
 	//		WCHAR	Nickname[20]
 	//		
 	//		WORD	MessageLen
