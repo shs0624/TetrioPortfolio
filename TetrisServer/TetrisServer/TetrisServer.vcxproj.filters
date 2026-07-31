@@ -18,6 +18,9 @@
     <Filter Include="Debug">
       <UniqueIdentifier>{a3b5431f-581f-4f4a-a380-566d725c6165}</UniqueIdentifier>
     </Filter>
+    <Filter Include="MatchingManager">
+      <UniqueIdentifier>{84fffe2c-616c-423f-ad14-80bf7f0a415b}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="TetrisServer.cpp">
@@ -40,6 +43,9 @@
     </ClCompile>
     <ClCompile Include="TetrisServer_Packet.cpp">
       <Filter>TetrisServer</Filter>
+    </ClCompile>
+    <ClCompile Include="MatchingManager.cpp">
+      <Filter>MatchingManager</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -89,6 +95,12 @@
       <Filter>Debug</Filter>
     </ClInclude>
     <ClInclude Include="Protocol.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="MatchingManager.h">
+      <Filter>MatchingManager</Filter>
+    </ClInclude>
+    <ClInclude Include="UserSession.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
   </ItemGroup>

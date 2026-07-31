@@ -1,6 +1,8 @@
 #include "Includes.h"
 #include "Protocol.h"
 #include "NetServer.h"
+#include "UserSession.h"
+#include "MatchingManager.h"
 #include "TetrisServer.h"
 
 void TetrisServer::MessageProc_Login(ULONGLONG sessionID, RefCountPointer& cPacket)
@@ -230,4 +232,11 @@ void TetrisServer::MessageProc_ChatMessage(ULONGLONG sessionID, RefCountPointer&
 		_pLog._dwPacketPoolUse--;
 
 	_pLog._dwChatMessageTPS++;
+}
+
+void TetrisServer::MessageProc_MatchingReq(ULONGLONG sessionID, RefCountPointer& cPacket)
+{
+	INT64 accountNum;
+
+	// 매칭 큐에 넣고... 매칭은 별도의 스레드가 있어야 하는 것 같다.
 }

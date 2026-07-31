@@ -1,6 +1,8 @@
 #include "Includes.h"
 #include "Protocol.h"
 #include "NetServer.h"
+#include "UserSession.h"
+#include "MatchingManager.h"
 #include "TetrisServer.h"
 
 void TetrisServer::mpRESLogin(RefCountPointer& cPacket, BYTE status)

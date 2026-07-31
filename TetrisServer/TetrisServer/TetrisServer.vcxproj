@@ -130,6 +130,7 @@
   <ItemGroup>
     <ClCompile Include="CRingBuffer.cpp" />
     <ClCompile Include="CSerializationBuffer.cpp" />
+    <ClCompile Include="MatchingManager.cpp" />
     <ClCompile Include="NetServer.cpp" />
     <ClCompile Include="ProcademyProfiler.cpp" />
     <ClCompile Include="TetrisServer.cpp" />
@@ -147,12 +148,14 @@
     <ClInclude Include="LockFreeQueue.h" />
     <ClInclude Include="LockFreeStack_Re.h" />
     <ClInclude Include="LogManager.h" />
+    <ClInclude Include="MatchingManager.h" />
     <ClInclude Include="NetServer.h" />
     <ClInclude Include="ProcademyProfiler.h" />
     <ClInclude Include="Protocol.h" />
     <ClInclude Include="RefCountPointer.h" />
     <ClInclude Include="TetrisServer.h" />
     <ClInclude Include="TLSMemoryPool.h" />
+    <ClInclude Include="UserSession.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

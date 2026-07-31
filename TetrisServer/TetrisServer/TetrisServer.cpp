@@ -1,6 +1,8 @@
 ﻿#include "Includes.h"
 #include "Protocol.h"
 #include "NetServer.h"
+#include "UserSession.h"
+#include "MatchingManager.h"
 #include "TetrisServer.h"
 
 int main()
@@ -54,6 +56,10 @@ void TetrisServer::OnRecv(ULONGLONG sessionID, RefCountPointer& cPacket)
 		break;
 	case en_PACKET_CS_TETRIS_REQ_CHAT_MESSAGE:
 		MessageProc_ChatMessage(sessionID, cPacket);
+		break;
+	case en_PACKET_CS_TETRIS_REQ_MATCHING:
+		MessageProc_MatchingReq(sessionID, cPacket);
+		break;
 	}
 }
 
@@ -112,4 +118,34 @@ void TetrisServer::OnRelease(ULONGLONG sessionID)
 	}
 	else
 		ReleaseSRWLockExclusive(&_SessionMapLock);
+}
+
+// context를 통해 어떤 객체인지 전달해서 사용 (static 함수)
+void TetrisServer::OnMatchFound(LPVOID context, st_USER* pUser1, st_USER* pUser2)
+{
+	TetrisServer* pServer = (TetrisServer*)context;
+	AcquireSRWLockExclusive(&pServer->_ChatDataLock);
+
+	auto it = pServer->_ChatUserIndexMap.find(pUser1->ulSessionID);
+	if (it == pServer->_ChatUserIndexMap.end())
+	{
+		DebugBreak();
+		return;
+	}
+
+	auto it2 = pServer->_ChatUserIndexMap.find(pUser2->ulSessionID);
+	if (it == pServer->_ChatUserIndexMap.end())
+	{
+		DebugBreak();
+		return;
+	}
+
+	pServer->_ChatUserIndexMap.erase(it);
+	pServer->_ChatUserIndexMap.erase(it2);
+
+	InterlockedExchange((LONG*)&pUser1->enServerState, en_SERVER_GAME);
+	InterlockedExchange((LONG*)&pUser2->enServerState, en_SERVER_GAME);
+	ReleaseSRWLockExclusive(&pServer->_ChatDataLock);
+
+	// 게임 방 생성
 }
