@@ -236,7 +236,32 @@ void TetrisServer::MessageProc_ChatMessage(ULONGLONG sessionID, RefCountPointer&
 
 void TetrisServer::MessageProc_MatchingReq(ULONGLONG sessionID, RefCountPointer& cPacket)
 {
-	INT64 accountNum;
+	BYTE status = TRUE;
 
-	// 매칭 큐에 넣고... 매칭은 별도의 스레드가 있어야 하는 것 같다.
+	// 매칭 큐에 넣기
+	AcquireSRWLockShared(&_UserMapLock);
+	auto it = _UserMap.find(sessionID);
+	if (it == _UserMap.end())
+	{
+		ReleaseSRWLockShared(&_UserMapLock);
+		if (!cPacket.DecRefCount())
+			_pLog._dwPacketPoolUse--;
+
+		Disconnect(sessionID);
+		return;
+	}
+
+	st_USER* userPtr = (*it).second;
+
+	// 매칭 서버로의 입장
+	InterlockedExchange((LONG*)&(userPtr->enServerState), en_SERVER_MATCHING);
+	ReleaseSRWLockShared(&_UserMapLock);
+
+	pMatchManager->Enqueue(userPtr);
+
+	// 매칭 요청에 대한 응답
+	(*cPacket)->Clear(sizeof(st_NetHeader));
+	mpRESMatching(cPacket, status);
+
+	SendPacket_UniCast(sessionID, cPacket);
 }

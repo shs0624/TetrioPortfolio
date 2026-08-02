@@ -52,6 +52,8 @@ private:
 	void mpACKChatEnter(RefCountPointer& cPacket, INT64 accountNum, WCHAR* nickname);
 	void mpACKChatExit(RefCountPointer& cPacket, INT64 accountNum, WCHAR* nickname);
 
+	void mpRESMatching(RefCountPointer& cPacket, BYTE status);
+
 	// 함수 포인터에 전달하기 위해 static
 	static void OnMatchFound(LPVOID context, st_USER* pUser1, st_USER* pUser2);
 
