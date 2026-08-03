@@ -47,6 +47,9 @@
     <ClCompile Include="MatchingManager.cpp">
       <Filter>MatchingManager</Filter>
     </ClCompile>
+    <ClCompile Include="TetrisServer_GameLogic.cpp">
+      <Filter>TetrisServer</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="CSerializationBuffer.h">
@@ -101,6 +104,9 @@
       <Filter>MatchingManager</Filter>
     </ClInclude>
     <ClInclude Include="UserSession.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="GameHeader.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
   </ItemGroup>

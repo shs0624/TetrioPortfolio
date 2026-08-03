@@ -1,6 +1,7 @@
 ﻿#include "Includes.h"
 #include "Protocol.h"
 #include "NetServer.h"
+#include "GameHeader.h"
 #include "UserSession.h"
 #include "MatchingManager.h"
 #include "TetrisServer.h"

@@ -14,8 +14,19 @@ public:
 		{
 			StartNetServer(ip, port, bNagleEnabled, maxConnection, _FixedKey, _ProgramKey);
 
+			InitializeSRWLock(&_UserMapLock);
+			InitializeSRWLock(&_SessionMapLock);
+
+			_hQuitEvent = CreateEvent(NULL, FALSE, FALSE, NULL);
+			
 			pMatchManager = new MatchingManager();
 			pMatchManager->InitMatchingManager(this, &TetrisServer::OnMatchFound);
+
+			for (int i = 0; i < 10; i++)
+			{
+				_GameTickThreadHandleArr[i] = 
+					(HANDLE)_beginthreadex(NULL, 0, GameTickThread, this, 0, &_GameTickThreadIDArr[i]);
+			}
 		}
 		catch (const std::exception& e)
 		{
@@ -23,8 +34,6 @@ public:
 			throw;
 		}
 
-		InitializeSRWLock(&_UserMapLock);
-		InitializeSRWLock(&_SessionMapLock);
 	}
 
 	void QuitServer() override
@@ -57,6 +66,19 @@ private:
 	// 함수 포인터에 전달하기 위해 static
 	static void OnMatchFound(LPVOID context, st_USER* pUser1, st_USER* pUser2);
 
+	// 게임 틱 스레드 관리 -> 동시 게임 5000명 -> 스레드당 500개 관리
+	HANDLE _GameTickThreadHandleArr[10];
+	unsigned int _GameTickThreadIDArr[10];
+	
+	// 스레드 당 최대 관리 세션 수, 틱 프레임 타임
+	const int _MaxGameSessionPerThread = 500;
+	const DWORD _dwFrameTime = 33;
+
+	unsigned int _GameSessionCount = 0;
+	st_GAMESESSION _GameSessionArr[10][500];
+	static unsigned int WINAPI GameTickThread(LPVOID arg);
+	bool inline SleepCheck();
+
 	procademy::CMemoryPool_LockFree<st_USER>* _UserPool;
 	procademy::CMemoryPool_LockFree<st_SESSION>* _SessionPool;	
 
@@ -76,6 +98,9 @@ private:
 	vector<st_USER*> _ChatUserVec;
 	unordered_map<ULONGLONG, int> _ChatUserIndexMap;
 	SRWLOCK _ChatDataLock;
+
+	// 종료 체크용 핸들
+	HANDLE _hQuitEvent;
 
 	const char _FixedKey = 0x32;
 	const char _ProgramKey = 0x77;

@@ -134,6 +134,7 @@
     <ClCompile Include="NetServer.cpp" />
     <ClCompile Include="ProcademyProfiler.cpp" />
     <ClCompile Include="TetrisServer.cpp" />
+    <ClCompile Include="TetrisServer_GameLogic.cpp" />
     <ClCompile Include="TetrisServer_Message.cpp" />
     <ClCompile Include="TetrisServer_Packet.cpp" />
   </ItemGroup>
@@ -144,6 +145,7 @@
     <ClInclude Include="CFreeList_LockFree.h" />
     <ClInclude Include="CRingBuffer.h" />
     <ClInclude Include="CSerializationBuffer.h" />
+    <ClInclude Include="GameHeader.h" />
     <ClInclude Include="Includes.h" />
     <ClInclude Include="LockFreeQueue.h" />
     <ClInclude Include="LockFreeStack_Re.h" />
