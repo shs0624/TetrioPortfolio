@@ -3,32 +3,44 @@ using UnityEngine.UI;
 using TMPro;
 
 /// <summary>
-/// Manages the Login Scene: login form + sign-up popup.
-/// Finds all UI elements by name at Start() – no Inspector wiring needed.
-/// [SERVER_HOOK] marks integration points for the network layer.
+/// Manages the Login Scene: login form, sign-up popup, and toast notifications.
+/// [SERVER_HOOK] marks network integration points.
 /// </summary>
 public class LoginUI : MonoBehaviour
 {
     // ── Login form ───────────────────────────────────────────────────────
-    TMP_InputField  _loginId;
-    TMP_InputField  _loginPw;
-    Button          _loginBtn;
-    Button          _signUpBtn;
-
-    // ── State ────────────────────────────────────────────────────────────
-    bool _idChecked = false;
-    bool _nickChecked = false;
+    TMP_InputField   _loginId;
+    TMP_InputField   _loginPw;
+    Button           _loginBtn;
+    Button           _signUpBtn;
 
     // ── Sign-up popup ────────────────────────────────────────────────────
-    GameObject      _popup;
-    TMP_InputField  _suId;
-    TMP_InputField  _suPw;
-    TMP_InputField  _suNick;
-    Button          _checkIdBtn;
-    Button          _checkNickBtn;
-    Button          _confirmBtn;
-    Button          _cancelBtn;
-    TextMeshProUGUI _statusText;
+    GameObject       _signUpPopup;
+    TMP_InputField   _suId;
+    TMP_InputField   _suPw;
+    TMP_InputField   _suNick;
+    Button           _checkIdBtn;
+    Button           _checkNickBtn;
+    Button           _confirmBtn;
+    Button           _cancelBtn;
+    TextMeshProUGUI  _statusText;
+    bool             _idChecked;
+    bool             _nickChecked;
+
+    // ── Toast notification ───────────────────────────────────────────────
+    GameObject       _toast;
+    Image            _toastBorderImg;
+    Image            _toastStripImg;
+    TextMeshProUGUI  _toastIcon;
+    TextMeshProUGUI  _toastTitle;
+    TextMeshProUGUI  _toastMessage;
+    Button           _toastOKBtn;
+
+    static readonly Color COL_SUCCESS = new Color(0.30f, 0.85f, 0.50f, 1f);
+    static readonly Color COL_ERROR   = new Color(0.90f, 0.32f, 0.32f, 1f);
+    static readonly Color COL_INFO    = new Color(0.40f, 0.65f, 1.00f, 1f);
+
+    public enum ToastType { Info, Success, Error }
 
     // ════════════════════════════════════════════════════════════════════
     void Start()
@@ -36,83 +48,95 @@ public class LoginUI : MonoBehaviour
         CacheRefs();
 
         _loginBtn?.onClick.AddListener(OnLogin);
-        _signUpBtn?.onClick.AddListener(OpenPopup);
+        _signUpBtn?.onClick.AddListener(OpenSignUp);
         _checkIdBtn?.onClick.AddListener(OnCheckId);
         _checkNickBtn?.onClick.AddListener(OnCheckNickname);
         _confirmBtn?.onClick.AddListener(OnConfirmSignUp);
-        _cancelBtn?.onClick.AddListener(ClosePopup);
+        _cancelBtn?.onClick.AddListener(CloseSignUp);
+        _toastOKBtn?.onClick.AddListener(CloseToast);
 
-        if (_popup != null) _popup.SetActive(false);
+        if (_signUpPopup != null) _signUpPopup.SetActive(false);
+        if (_toast       != null) _toast.SetActive(false);
     }
 
     // ════════════════════════════════════════════════════════════════════
-    // Popup open / close
+    // ── Toast (public API) ───────────────────────────────────────────────
     // ════════════════════════════════════════════════════════════════════
-    public void OpenPopup()
+
+    /// <summary>Display a toast notification. Call from anywhere.</summary>
+    public void ShowToast(string message, ToastType type = ToastType.Info)
     {
-        if (_popup == null) return;
-        _idChecked   = false;
-        _nickChecked = false;
-        ClearPopupInputs();
-        SetStatus("");
-        _popup.SetActive(true);
+        if (_toast == null) { Debug.LogWarning("[LoginUI] ToastPopup not found."); return; }
+
+        Color  col   = type == ToastType.Success ? COL_SUCCESS :
+                       type == ToastType.Error   ? COL_ERROR   : COL_INFO;
+        string icon  = type == ToastType.Success ? "OK" :
+                       type == ToastType.Error   ? "!!" : "i";
+        string title = type == ToastType.Success ? "SUCCESS" :
+                       type == ToastType.Error   ? "ERROR"   : "INFO";
+
+        if (_toastBorderImg != null) _toastBorderImg.color = col;
+        if (_toastStripImg  != null) _toastStripImg.color  = col;
+        if (_toastIcon      != null) { _toastIcon.text  = icon;  _toastIcon.color  = col; }
+        if (_toastTitle     != null) { _toastTitle.text = title; _toastTitle.color = col; }
+        if (_toastMessage   != null)   _toastMessage.text = message;
+
+        _toast.SetActive(true);
     }
 
-    public void ClosePopup()
+    /// <summary>Hide the toast notification.</summary>
+    public void CloseToast()
     {
-        if (_popup != null) _popup.SetActive(false);
+        if (_toast != null) _toast.SetActive(false);
     }
 
     // ════════════════════════════════════════════════════════════════════
-    // Login
+    // ── Sign-up popup ────────────────────────────────────────────────────
     // ════════════════════════════════════════════════════════════════════
+
+    public void OpenSignUp()
+    {
+        if (_signUpPopup == null) return;
+        _idChecked = false; _nickChecked = false;
+        ClearSignUpFields(); SetStatus("");
+        _signUpPopup.SetActive(true);
+    }
+
+    public void CloseSignUp()
+    {
+        if (_signUpPopup != null) _signUpPopup.SetActive(false);
+    }
+
+    // ════════════════════════════════════════════════════════════════════
+    // ── Button handlers ──────────────────────────────────────────────────
+    // ════════════════════════════════════════════════════════════════════
+
     void OnLogin()
     {
         string id = _loginId != null ? _loginId.text.Trim() : "";
         string pw = _loginPw != null ? _loginPw.text        : "";
-
-        if (string.IsNullOrEmpty(id)) { Debug.LogWarning("[LoginUI] ID is empty.");       return; }
-        if (string.IsNullOrEmpty(pw)) { Debug.LogWarning("[LoginUI] Password is empty."); return; }
-
-        Debug.Log("[LoginUI] Login → ID: " + id);
+        if (string.IsNullOrEmpty(id)) { ShowToast("Please enter your ID.",       ToastType.Error); return; }
+        if (string.IsNullOrEmpty(pw)) { ShowToast("Please enter your password.", ToastType.Error); return; }
+        Debug.Log("[LoginUI] Login → " + id);
         // [SERVER_HOOK] NetworkManager.Instance.SendLogin(id, pw);
     }
 
-    // ════════════════════════════════════════════════════════════════════
-    // Sign-up popup handlers
-    // ════════════════════════════════════════════════════════════════════
     void OnCheckId()
     {
         string id = _suId != null ? _suId.text.Trim() : "";
-        if (string.IsNullOrEmpty(id))
-        {
-            SetStatus("Please enter an ID first.");
-            return;
-        }
-        _idChecked = false;
-        SetStatus("Checking ID availability...");
-        Debug.Log("[LoginUI] CheckId: " + id);
+        if (string.IsNullOrEmpty(id)) { ShowToast("Enter an ID to check.", ToastType.Error); return; }
+        SetStatus("Checking...");
         // [SERVER_HOOK] NetworkManager.Instance.CheckId(id, OnCheckIdResult);
-
-        // ── Stub (remove when server is connected) ──
-        OnCheckIdResult(true);
+        OnCheckIdResult(true); // stub – remove when server connected
     }
 
     void OnCheckNickname()
     {
         string nick = _suNick != null ? _suNick.text.Trim() : "";
-        if (string.IsNullOrEmpty(nick))
-        {
-            SetStatus("Please enter a nickname first.");
-            return;
-        }
-        _nickChecked = false;
-        SetStatus("Checking nickname availability...");
-        Debug.Log("[LoginUI] CheckNickname: " + nick);
+        if (string.IsNullOrEmpty(nick)) { ShowToast("Enter a nickname to check.", ToastType.Error); return; }
+        SetStatus("Checking...");
         // [SERVER_HOOK] NetworkManager.Instance.CheckNickname(nick, OnCheckNicknameResult);
-
-        // ── Stub (remove when server is connected) ──
-        OnCheckNicknameResult(true);
+        OnCheckNicknameResult(true); // stub
     }
 
     void OnConfirmSignUp()
@@ -121,84 +145,108 @@ public class LoginUI : MonoBehaviour
         string pw   = _suPw   != null ? _suPw.text          : "";
         string nick = _suNick != null ? _suNick.text.Trim() : "";
 
-        if (string.IsNullOrEmpty(id))   { SetStatus("ID cannot be empty.");       return; }
-        if (string.IsNullOrEmpty(pw))   { SetStatus("Password cannot be empty."); return; }
-        if (string.IsNullOrEmpty(nick)) { SetStatus("Nickname cannot be empty."); return; }
-        if (!_idChecked)   { SetStatus("Please check ID availability first.");       return; }
-        if (!_nickChecked) { SetStatus("Please check nickname availability first."); return; }
+        if (string.IsNullOrEmpty(id))   { ShowToast("ID cannot be empty.",                      ToastType.Error); return; }
+        if (string.IsNullOrEmpty(pw))   { ShowToast("Password cannot be empty.",                ToastType.Error); return; }
+        if (string.IsNullOrEmpty(nick)) { ShowToast("Nickname cannot be empty.",                ToastType.Error); return; }
+        if (!_idChecked)                { ShowToast("Check ID availability first.",             ToastType.Error); return; }
+        if (!_nickChecked)              { ShowToast("Check nickname availability first.",       ToastType.Error); return; }
 
-        Debug.Log("[LoginUI] SignUp → ID: " + id + "  Nick: " + nick);
         SetStatus("Creating account...");
+        Debug.Log("[LoginUI] SignUp → " + id + " / " + nick);
         // [SERVER_HOOK] NetworkManager.Instance.SendSignUp(id, pw, nick);
     }
 
     // ════════════════════════════════════════════════════════════════════
-    // Server response callbacks  [SERVER_HOOK] – call these from network layer
+    // ── Server callbacks  [SERVER_HOOK] ──────────────────────────────────
     // ════════════════════════════════════════════════════════════════════
+
+    public void OnLoginFailed(string reason)
+        => ShowToast("Login failed: " + reason, ToastType.Error);
+
     public void OnCheckIdResult(bool available)
     {
         _idChecked = available;
-        SetStatus(available ? "✓  ID is available." : "✗  ID is already taken.");
+        SetStatus(available ? "ID is available." : "ID is already taken.");
+        ShowToast(
+            available ? "This ID is available!" : "This ID is already taken.",
+            available ? ToastType.Success : ToastType.Error);
     }
 
     public void OnCheckNicknameResult(bool available)
     {
         _nickChecked = available;
-        SetStatus(available ? "✓  Nickname is available." : "✗  Nickname is already taken.");
+        SetStatus(available ? "Nickname is available." : "Nickname is already taken.");
+        ShowToast(
+            available ? "This nickname is available!" : "This nickname is already taken.",
+            available ? ToastType.Success : ToastType.Error);
     }
 
     public void OnSignUpSuccess()
     {
-        SetStatus("Account created!  You can now log in.");
-        Invoke(nameof(ClosePopup), 1.5f);
+        CloseSignUp();
+        ShowToast("Account created!  You can now log in.", ToastType.Success);
     }
 
     public void OnSignUpFailed(string reason)
-        => SetStatus("Sign up failed: " + reason);
+        => ShowToast("Sign up failed: " + reason, ToastType.Error);
 
     // ════════════════════════════════════════════════════════════════════
-    // Helpers
+    // ── Helpers ──────────────────────────────────────────────────────────
     // ════════════════════════════════════════════════════════════════════
-    void SetStatus(string msg)
-    {
-        if (_statusText != null) _statusText.text = msg;
-    }
 
-    void ClearPopupInputs()
+    void SetStatus(string msg) { if (_statusText != null) _statusText.text = msg; }
+
+    void ClearSignUpFields()
     {
-        if (_suId)   _suId.text   = "";
-        if (_suPw)   _suPw.text   = "";
-        if (_suNick) _suNick.text = "";
+        if (_suId   != null) _suId.text   = "";
+        if (_suPw   != null) _suPw.text   = "";
+        if (_suNick != null) _suNick.text = "";
     }
 
     void CacheRefs()
     {
-        _loginId   = Find<TMP_InputField>("IDInput");
-        _loginPw   = Find<TMP_InputField>("PWInput");
-        _loginBtn  = Find<Button>("LoginBtn");
-        _signUpBtn = Find<Button>("SignUpBtn");
+        Canvas cv = FindObjectOfType<Canvas>();
 
-        _popup = GameObject.Find("SignUpPopup");
-        if (_popup != null)
+        // Active objects – GameObject.Find works fine
+        _loginId   = FindComp<TMP_InputField>("IDInput");
+        _loginPw   = FindComp<TMP_InputField>("PWInput");
+        _loginBtn  = FindComp<Button>("LoginBtn");
+        _signUpBtn = FindComp<Button>("SignUpBtn");
+
+        if (cv == null) return;
+
+        // Inactive objects – Transform.Find works on inactive children
+        Transform suRoot = cv.transform.Find("SignUpPopup");
+        if (suRoot != null)
         {
-            _suId        = FindInTree<TMP_InputField>(_popup, "SUIDInput");
-            _suPw        = FindInTree<TMP_InputField>(_popup, "SUPWInput");
-            _suNick      = FindInTree<TMP_InputField>(_popup, "SUNickInput");
-            _checkIdBtn  = FindInTree<Button>(_popup, "CheckIDBtn");
-            _checkNickBtn= FindInTree<Button>(_popup, "CheckNickBtn");
-            _confirmBtn  = FindInTree<Button>(_popup, "ConfirmBtn");
-            _cancelBtn   = FindInTree<Button>(_popup, "CancelBtn");
-            _statusText  = FindInTree<TextMeshProUGUI>(_popup, "StatusText");
+            _signUpPopup  = suRoot.gameObject;
+            _suId         = DeepFind<TMP_InputField>(suRoot, "SUIDInput");
+            _suPw         = DeepFind<TMP_InputField>(suRoot, "SUPWInput");
+            _suNick       = DeepFind<TMP_InputField>(suRoot, "SUNickInput");
+            _checkIdBtn   = DeepFind<Button>(suRoot, "CheckIDBtn");
+            _checkNickBtn = DeepFind<Button>(suRoot, "CheckNickBtn");
+            _confirmBtn   = DeepFind<Button>(suRoot, "ConfirmBtn");
+            _cancelBtn    = DeepFind<Button>(suRoot, "CancelBtn");
+            _statusText   = DeepFind<TextMeshProUGUI>(suRoot, "StatusText");
+        }
+
+        Transform toastRoot = cv.transform.Find("ToastPopup");
+        if (toastRoot != null)
+        {
+            _toast          = toastRoot.gameObject;
+            _toastBorderImg = DeepFind<Image>(toastRoot,           "ToastBorder");
+            _toastStripImg  = DeepFind<Image>(toastRoot,           "ToastStrip");
+            _toastIcon      = DeepFind<TextMeshProUGUI>(toastRoot, "ToastIcon");
+            _toastTitle     = DeepFind<TextMeshProUGUI>(toastRoot, "ToastTitle");
+            _toastMessage   = DeepFind<TextMeshProUGUI>(toastRoot, "ToastMessage");
+            _toastOKBtn     = DeepFind<Button>(toastRoot,          "ToastOKBtn");
         }
     }
 
-    static T Find<T>(string name) where T : Component
-    {
-        var go = GameObject.Find(name);
-        return go != null ? go.GetComponent<T>() : null;
-    }
+    static T FindComp<T>(string goName) where T : Component
+    { var g = GameObject.Find(goName); return g != null ? g.GetComponent<T>() : null; }
 
-    static T FindInTree<T>(GameObject root, string name) where T : Component
+    static T DeepFind<T>(Transform root, string name) where T : Component
     {
         foreach (T c in root.GetComponentsInChildren<T>(true))
             if (c.gameObject.name == name) return c;
