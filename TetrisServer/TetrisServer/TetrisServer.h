@@ -45,6 +45,7 @@ public:
 	void MessageProc_Login(ULONGLONG sessionID, RefCountPointer& cPacket);
 	void MessageProc_ChatMessage(ULONGLONG sessionID, RefCountPointer& cPacket);
 	void MessageProc_MatchingReq(ULONGLONG sessionID, RefCountPointer& cPacket);
+	void MessageProc_GameReadyReq(ULONGLONG sessionID, RefCountPointer& cPacket);
 
 	//virtual bool OnConnectionRequest(ULONG ip, LONG port);
 	virtual bool OnAccept(ULONGLONG sessionID, SOCKADDR_IN clientAddr);
@@ -62,9 +63,13 @@ private:
 	void mpACKChatExit(RefCountPointer& cPacket, INT64 accountNum, WCHAR* nickname);
 
 	void mpRESMatching(RefCountPointer& cPacket, BYTE status);
+	void mpRESGameReady(RefCountPointer& cPacket, BYTE status);
+	void mpACKCountDown(RefCountPointer& cPacket, WORD count);
 
 	// 함수 포인터에 전달하기 위해 static
 	static void OnMatchFound(LPVOID context, st_USER* pUser1, st_USER* pUser2);
+	bool SetGameSession(st_USER* pUser1, st_USER* pUser2);
+	void StartCountDown(st_GAMESESSION* pGameSession);
 
 	// 게임 틱 스레드 관리 -> 동시 게임 5000명 -> 스레드당 500개 관리
 	HANDLE _GameTickThreadHandleArr[10];
@@ -73,8 +78,10 @@ private:
 	// 스레드 당 최대 관리 세션 수, 틱 프레임 타임
 	const int _MaxGameSessionPerThread = 500;
 	const DWORD _dwFrameTime = 33;
+	const WORD _wCountDown = 3;
 
-	unsigned int _GameSessionCount = 0;
+	LONG _GameSessionThreadCount = 0;
+	LONG _GameSessionActiveCountArr[10] = { 0 };
 	st_GAMESESSION _GameSessionArr[10][500];
 	static unsigned int WINAPI GameTickThread(LPVOID arg);
 	bool inline SleepCheck();

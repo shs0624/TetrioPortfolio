@@ -8,6 +8,14 @@ enum en_SERVER
 	en_SERVER_GAME
 };
 
+enum en_GAMESESSION_STATE : LONG
+{
+	en_GAMESTATE_UNUSED,      // 사용 안하는 상태
+	en_GAMESTATE_WAIT_READY,  // 매칭됨 -> 준비완료 패킷 대기중
+	en_GAMESTATE_COUNTING,    // 준비 완료 -> 카운트다운 패킷 보냄
+	en_GAMESTATE_PLAYING,     // 실제 게임 틱 진행중
+};
+
 // 게임에서 쓰는 블록
 struct st_Stacker
 {
@@ -33,10 +41,12 @@ struct st_GameInfo
 struct st_GAMESESSION
 {
 	SRWLOCK _GameSessionLock;
-	bool _bUsing;
+	en_GAMESESSION_STATE _State;	// LONG
+	LONG _lReady;					// 둘 다 Ready인지 한번에 체크하기 위한 비트체크 -> idx를 활용해서 그 비트 변경
 
 	// 몇 번 인덱스인지는 유저가 들고있고, 자기 정보는 idx, 상대 정보는 1-idx	
 	st_GameInfo _GameInfoArr[2];
+	ULONGLONG _SessionIDArr[2];
 };
 
 // 로그인 하지 않은 세션

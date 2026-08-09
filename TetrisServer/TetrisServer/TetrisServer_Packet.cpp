@@ -44,9 +44,25 @@ void TetrisServer::mpACKChatExit(RefCountPointer& cPacket, INT64 accountNum, WCH
 	(*cPacket)->PutData((char*)nickname, sizeof(WCHAR) * 20);
 }
 
+void TetrisServer::mpACKCountDown(RefCountPointer& cPacket, WORD count)
+{
+	en_PACKET_TYPE packetType = en_PACKET_SC_TETRIS_ACK_COUNTDOWN;
+
+	(**cPacket) << (WORD)packetType;
+	(**cPacket) << count;
+}
+
 void TetrisServer::mpRESMatching(RefCountPointer& cPacket, BYTE status)
 {
 	en_PACKET_TYPE packetType = en_PACKET_CS_TETRIS_RES_MATCHING;
+
+	(**cPacket) << (WORD)packetType;
+	(**cPacket) << status;
+}
+
+void TetrisServer::mpRESGameReady(RefCountPointer& cPacket, BYTE status)
+{
+	en_PACKET_TYPE packetType = en_PACKET_CS_TETRIS_RES_GAME_READY;
 
 	(**cPacket) << (WORD)packetType;
 	(**cPacket) << status;

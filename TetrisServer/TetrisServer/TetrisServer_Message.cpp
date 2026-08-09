@@ -265,3 +265,54 @@ void TetrisServer::MessageProc_MatchingReq(ULONGLONG sessionID, RefCountPointer&
 
 	SendPacket_UniCast(sessionID, cPacket);
 }
+
+void TetrisServer::MessageProc_GameReadyReq(ULONGLONG sessionID, RefCountPointer& cPacket)
+{
+	BYTE status = TRUE;
+
+	// 매칭 큐에 넣기
+	AcquireSRWLockShared(&_UserMapLock);
+	auto it = _UserMap.find(sessionID);
+	if (it == _UserMap.end())
+	{
+		ReleaseSRWLockShared(&_UserMapLock);
+		if (!cPacket.DecRefCount())
+			_pLog._dwPacketPoolUse--;
+
+		Disconnect(sessionID);
+		return;
+	}
+
+	st_USER* userPtr = (*it).second;
+	ReleaseSRWLockShared(&_UserMapLock);
+
+	// 매칭 요청에 대한 응답
+	(*cPacket)->Clear(sizeof(st_NetHeader));
+	if (userPtr->enServerState != en_SERVER_GAME)
+	{
+		status = FALSE;
+		mpRESGameReady(cPacket, status);
+
+		SendPacket_UniCast(sessionID, cPacket);
+		return;
+	}
+
+	(*cPacket)->Clear(sizeof(st_NetHeader));
+	mpRESGameReady(cPacket, status);
+
+	SendPacket_UniCast(sessionID, cPacket);
+
+	// 0번이면 0b01, 1번이면 0b10
+	LONG myBit = 1 << userPtr->byGameSessionIndex;  
+	LONG prevMask = InterlockedOr((LONG*)&userPtr->pGameSession->_lReady, myBit);
+
+	// 둘 다 준비 완료된 상태면 
+	if ((prevMask | myBit) == 0b11)
+	{
+		if (InterlockedCompareExchange((LONG*)&userPtr->pGameSession->_State,
+			en_GAMESTATE_COUNTING, en_GAMESTATE_WAIT_READY) == en_GAMESTATE_WAIT_READY)
+		{
+			StartCountDown(userPtr->pGameSession);
+		}
+	}
+}

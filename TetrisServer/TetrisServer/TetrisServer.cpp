@@ -61,6 +61,8 @@ void TetrisServer::OnRecv(ULONGLONG sessionID, RefCountPointer& cPacket)
 	case en_PACKET_CS_TETRIS_REQ_MATCHING:
 		MessageProc_MatchingReq(sessionID, cPacket);
 		break;
+	case en_PACKET_CS_TETRIS_REQ_GAME_READY:
+		break;
 	}
 }
 
@@ -149,4 +151,5 @@ void TetrisServer::OnMatchFound(LPVOID context, st_USER* pUser1, st_USER* pUser2
 	ReleaseSRWLockExclusive(&pServer->_ChatDataLock);
 
 	// 게임 방 생성
+	pServer->SetGameSession(pUser1, pUser2);
 }
