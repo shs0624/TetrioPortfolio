@@ -68,7 +68,7 @@ struct st_USER
 
 	WCHAR ID[20];
 	WCHAR NickName[20];
-	char SessionKey[64];
+	WCHAR SessionKey[64];
 
 	// 게임 관련 정보 -> 방 정보, 인덱스
 	st_GAMESESSION* pGameSession;

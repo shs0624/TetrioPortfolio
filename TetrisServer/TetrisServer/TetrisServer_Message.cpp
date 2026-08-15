@@ -1,4 +1,5 @@
 #include "Includes.h"
+#include "Util.h"
 #include "Protocol.h"
 #include "NetServer.h"
 #include "UserSession.h"
@@ -10,11 +11,12 @@ void TetrisServer::MessageProc_Login(ULONGLONG sessionID, RefCountPointer& cPack
 	INT64 accountNum;
 	BYTE status = FALSE;
 	WCHAR Nickname[20];
-	CHAR tempSessionKey[64];
+	WCHAR tempSessionKey[64];
 
 	(**cPacket) >> accountNum;
 
 	(*cPacket)->GetData((char*)tempSessionKey, sizeof(tempSessionKey));
+	std::wstring wSessionKey(tempSessionKey, 64);
 
 	// Redis 검증
 	cpp_redis::client& _redisClient = GetTLSRedisClient();
@@ -57,8 +59,9 @@ void TetrisServer::MessageProc_Login(ULONGLONG sessionID, RefCountPointer& cPack
 		return;
 	}
 
+	std::string sessionKey = WstrToStr(wSessionKey);
 	// 보낸 세션키와 레디스에 꺼낸 세션키 비교
-	if (reply_SessionKey.as_string().compare(0, 64, tempSessionKey, 64) != 0)
+	if (reply_SessionKey.as_string().compare(0, 64, sessionKey) != 0)
 	{
 		// 검증 실패
 		(*cPacket)->Clear(sizeof(st_NetHeader));
