@@ -1,5 +1,6 @@
 #pragma once
 #define QUERY_MAXCLASSSIZE 128
+#define MYSQL_MAX_PARAM 4
 
 enum enLogin_Column
 {

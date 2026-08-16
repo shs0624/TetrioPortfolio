@@ -1,7 +1,7 @@
 #pragma once
 #define PROTOCOL_MAX_SIZE 500
 #define MAX_PACKET_BATCH 1000
-#define SERVERPORT	20204
+#define SERVERPORT	10600
 #define PROTOCOL_SIZE 10
 #define PROTOCOL_NUMSIZE 8
 #include "LogManager.h"

@@ -5,8 +5,6 @@
 #include "errmsg.h"
 #include "DBQueryProtocol.h"
 
-#define MYSQL_MAX_PARAM 4
-
 namespace SHS
 {
 	class DBTLSConnector

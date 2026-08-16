@@ -32,6 +32,7 @@ namespace SHS
 				return false;
 			}
 
+			_stmtCache.clear();
 			_bConnected = true;
 			return true;
 		}
@@ -53,47 +54,80 @@ namespace SHS
 		}
 
 	private:
+		MYSQL_STMT* GetOrPrepareStmt(const char* queryText)
+		{
+			auto it = _stmtCache.find(queryText);
+			if (it != _stmtCache.end()) return it->second;
+
+			MYSQL_STMT* stmt = mysql_stmt_init(connection);
+			if (mysql_stmt_prepare(stmt, queryText, (unsigned long)strlen(queryText)) != 0)
+			{
+				mysql_stmt_close(stmt);
+				return nullptr;
+			}
+			_stmtCache[queryText] = stmt;
+			return stmt;
+		}
+
 		void DBWriteThread()
 		{
-			MYSQL_RES* sql_result;
-			MYSQL_ROW sql_row;
-			int query_stat;
-
 			IDBJob* pJob;
 			while (1)
 			{
 				WaitForSingleObject(_hQEvent, INFINITE);
 
-				AcquireSRWLockExclusive(&_QueueLock);
-				pJob = _QueryQueue.front();
-				_QueryQueue.pop();
-				ReleaseSRWLockExclusive(&_QueueLock);
+				while (true)
+				{
+					AcquireSRWLockExclusive(&_QueueLock);
+					if (_QueryQueue.empty())
+					{
+						ReleaseSRWLockExclusive(&_QueueLock);
+						break;
+					}
 
+					pJob = _QueryQueue.front();
+					_QueryQueue.pop();
+					ReleaseSRWLockExclusive(&_QueueLock);
 
-				int query_stat;
-				std::ostringstream oss;
+					const char* queryText = pJob->GetQueryText();
+					MYSQL_STMT* stmt = GetOrPrepareStmt(queryText);
+					if (!stmt)
+					{
+						DebugBreak();
+						_bConnected = false;
 
-				pJob->Exec(oss);
+						pJob->~IDBJob();
+						_pJobPool->Free((CDBPoolStruct*)pJob);
+						break;
+					}
 
-				std::string sql = oss.str();
+					MYSQL_BIND paramBind[MYSQL_MAX_PARAM] = {};
+					pJob->BindParams(paramBind);
+					mysql_stmt_bind_param(stmt, paramBind);
 
-				// Select 쿼리문
-				query_stat = mysql_query(&_Conn, sql.c_str());
-				if (query_stat != 0) {
-					printf("Mysql query error : %s", mysql_error(&_Conn));
+					if (mysql_stmt_execute(stmt) != 0)
+					{
+						printf("Mysql query error : %s\n", mysql_stmt_error(stmt));
+						mysql_stmt_close(stmt);
+						_bConnected = false;
+
+						pJob->~IDBJob();
+						_pJobPool->Free((CDBPoolStruct*)pJob);
+						continue;
+					}
 
 					pJob->~IDBJob();
 					_pJobPool->Free((CDBPoolStruct*)pJob);
-					continue;
+
+					//res = mysql_store_result(connection);
+
 				}
 
-				pJob->~IDBJob();
-				_pJobPool->Free((CDBPoolStruct*)pJob);
-
-				res = mysql_store_result(connection);
 			}
 		}
 
+		// stmt 준비해놓기 -> Query별로
+		std::unordered_map<std::string, MYSQL_STMT*> _stmtCache;
 
 		MYSQL _Conn;
 		bool _bConnected;
@@ -104,7 +138,6 @@ namespace SHS
 		std::thread _DBWriteThread;
 
 		MYSQL* connection;
-		MYSQL_RES* res;
 		TLSMemoryPoolManager<CDBPoolStruct>* _pJobPool;
 	};
 
@@ -113,7 +146,9 @@ namespace SHS
 	{
 	public:
 		DBWriterManager() {};
-		~DBWriterManager() {};
+		~DBWriterManager() 
+		{
+		};
 
 		// 할당해가서 걔를 외부에서 placementNew
 		LPVOID AllocJobAddress()
@@ -139,7 +174,8 @@ namespace SHS
 		void InitDBWriterManager(int threadCount)
 		{
 			_SingleDBWriter.InitDBWriter(&_JobPool);
-			_pDBWriterArr = (DBWriter*)malloc(sizeof(DBWriter) * threadCount);
+			//_pDBWriterArr = (DBWriter*)malloc(sizeof(DBWriter) * threadCount);
+			_pDBWriterArr = new DBWriter[threadCount];
 
 			_ithreadCount = threadCount;
 			// 연결이 아니라, 스레드를 생성해야함.
