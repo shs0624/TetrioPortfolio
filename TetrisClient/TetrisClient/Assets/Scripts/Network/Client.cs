@@ -51,7 +51,7 @@ public class Client : MonoBehaviour
     const int ID_FIELD_LEN            = 20;  // char ID[20]
     const int PW_FIELD_LEN            = 20;  // char Passwd[20]
     const int NICK_FIELD_LEN          = 20;  // char Nickname[20]
-    const int GAME_SESSIONKEY_LEN     = 64;  // 게임서버가 읽는 CHAR SessionKey[64]
+    const int GAME_SESSIONKEY_CHARS   = 64;  // 게임서버가 읽는 WCHAR SessionKey[64] (문자 수)
     const int LOGIN_SESSIONKEY_CHARS  = 64;  // 로그인서버가 보내는 WCHAR SessionKey[64] (문자 수)
     const int GAME_IP_CHARS           = 16;  // WCHAR GameIP[16] (문자 수)
 
@@ -365,9 +365,9 @@ public class Client : MonoBehaviour
 
     void SendGameLoginReq()
     {
-        var body = new byte[8 + GAME_SESSIONKEY_LEN];
+        var body = new byte[8 + GAME_SESSIONKEY_CHARS * 2];
         Buffer.BlockCopy(BitConverter.GetBytes(_accountNum), 0, body, 0, 8);
-        WriteFixedAscii(body, 8, _sessionKey, GAME_SESSIONKEY_LEN);
+        WriteFixedUtf16(body, 8, _sessionKey, GAME_SESSIONKEY_CHARS);
         SendToServer((ushort)PacketID.TETRIS_REQ_LOGIN, body);
     }
 
@@ -745,6 +745,16 @@ public class Client : MonoBehaviour
         if (s == null) s = "";
         byte[] raw = Encoding.ASCII.GetBytes(s);
         int copyLen = Math.Min(raw.Length, fieldLen);
+        Buffer.BlockCopy(raw, 0, dest, offset, copyLen);
+        // dest는 항상 새로 할당된 byte[]를 넘기는 전제라 나머지는 이미 0으로 채워져 있음.
+    }
+
+    // 서버 WCHAR[charCount] (UTF-16LE) 필드용 — 남는 자리는 0(널)으로 패딩.
+    static void WriteFixedUtf16(byte[] dest, int offset, string s, int charCount)
+    {
+        if (s == null) s = "";
+        byte[] raw = Encoding.Unicode.GetBytes(s);
+        int copyLen = Math.Min(raw.Length, charCount * 2);
         Buffer.BlockCopy(raw, 0, dest, offset, copyLen);
         // dest는 항상 새로 할당된 byte[]를 넘기는 전제라 나머지는 이미 0으로 채워져 있음.
     }

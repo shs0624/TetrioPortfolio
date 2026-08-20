@@ -12,7 +12,7 @@ public:
 	{
 		try
 		{
-			StartNetServer(ip, port, bNagleEnabled, maxConnection, _FixedKey, _ProgramKey);
+			StartNetServer(ip, port, bNagleEnabled, maxConnection, _ProgramKey, _FixedKey);
 
 			InitializeSRWLock(&_UserMapLock);
 			InitializeSRWLock(&_SessionMapLock);
