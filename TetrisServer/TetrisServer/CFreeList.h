@@ -18,7 +18,7 @@
 ----------------------------------------------------------------*/
 #ifndef  __PROCADEMY_MEMORY_POOL__
 #define  __PROCADEMY_MEMORY_POOL__
-#define DEFAULTSIZE 50
+#define DEFAULTSIZE_FREELIST 50
 #include <new.h>
 #include <Windows.h>
 
@@ -48,7 +48,7 @@ namespace procademy
 		{
 			InitializeCriticalSection(&_poolCRT);
 
-			m_iCreateCount = (iBlockNum == 0) ? DEFAULTSIZE : iBlockNum;
+			m_iCreateCount = (iBlockNum == 0) ? DEFAULTSIZE_FREELIST : iBlockNum;
 			m_iCapacity = iBlockNum;
 			m_iUseCount = 0;
 			m_bPlacementNew = bPlacementNew;

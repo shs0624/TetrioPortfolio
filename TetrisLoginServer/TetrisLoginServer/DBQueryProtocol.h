@@ -34,7 +34,7 @@ class CDBLogin : public IDBJob
 public:
 	const char* GetQueryText() const override
 	{
-		return "SELECT accountnum, passwd, nickname FROM accountdb WHERE id = ?";
+		return "SELECT accountnum, passwd, nickname FROM TetrisAccountdb WHERE id = ?";
 	}
 
 	int GetParamCount() const override
@@ -65,7 +65,7 @@ class CDBRegister_Check_ID : public IDBJob
 public:
 	const char* GetQueryText() const override
 	{
-		return "SELECT id FROM accountdb WHERE id = ?";
+		return "SELECT id FROM TetrisAccountdb WHERE id = ?";
 	}
 
 	int GetParamCount() const override
@@ -94,7 +94,7 @@ class CDBRegister_Check_Nickname : public IDBJob
 public:
 	const char* GetQueryText() const override
 	{
-		return "SELECT nickname FROM accountdb WHERE nickname = ?";
+		return "SELECT nickname FROM TetrisAccountdb WHERE nickname = ?";
 	}
 
 	int GetParamCount() const override
@@ -123,7 +123,7 @@ class CDBRegister_Insert : public IDBJob
 public:
 	const char* GetQueryText() const override
 	{
-		return "INSERT INTO accountdb (id, passwd, nickname) VALUES (?, ?, ?)";
+		return "INSERT INTO TetrisAccountdb (id, passwd, nickname) VALUES (?, ?, ?)";
 	}
 
 	int GetParamCount() const override

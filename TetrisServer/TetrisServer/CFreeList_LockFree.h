@@ -17,7 +17,7 @@
 
 ----------------------------------------------------------------*/
 #pragma once
-#define DEFAULTSIZE 500
+#define DEFAULTSIZE_FREELIST_LOCKFREE 500
 //#define LOG_LOCKFREELIST
 #include <new.h>
 #include <Windows.h>
@@ -59,7 +59,7 @@ namespace procademy
 
 		CMemoryPool_LockFree(int iBlockNum = 0, bool bPlacementNew = false, bool bCreateNew = false)
 		{
-			m_iCreateCount = (iBlockNum == 0) ? DEFAULTSIZE : iBlockNum;
+			m_iCreateCount = (iBlockNum == 0) ? DEFAULTSIZE_FREELIST_LOCKFREE : iBlockNum;
 			m_iCapacity = iBlockNum;
 			m_iUseCount = 0;
 			m_bPlacementNew = bPlacementNew;

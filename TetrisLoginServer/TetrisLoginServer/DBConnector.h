@@ -190,7 +190,7 @@ namespace SHS
 			connection = mysql_real_connect(sql, "127.0.0.1", "root", "12341234!!", "accountdb", 3306, (char*)NULL, CLIENT_MULTI_STATEMENTS);
 			if (connection == NULL)
 			{
-				fprintf(stderr, "Mysql connection error : %s", mysql_error(&conn));
+				fprintf(stderr, "Mysql connection error : %s", mysql_error(sql));
 				return false;
 			}
 

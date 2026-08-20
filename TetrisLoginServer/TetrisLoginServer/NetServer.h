@@ -1,5 +1,5 @@
 #pragma once
-#define dfTIMEOUT_SESSION 10000
+#define dfTIMEOUT_SESSION 40000
 
 #define MAX_PACKET_BATCH 300
 #define PROTOCOL_MAX_SIZE 500

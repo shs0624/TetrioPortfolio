@@ -77,6 +77,9 @@ void TetrisLoginServer::OnRecv(ULONGLONG sessionID, RefCountPointer& cPacket)
 	case en_PACKET_CS_TETRISLOGIN_REQ_LOGIN:
 		MessageProc_Login(cPacket, sessionID);
 		break;
+	case en_PACKET_CS_TETRIS_REQ_HEARTBEAT:
+	case en_PACKET_CS_TETRISLOGIN_REQ_HEARTBEAT:
+		break;
 	default:
 		Disconnect(sessionID);
 		if (!cPacket.DecRefCount())

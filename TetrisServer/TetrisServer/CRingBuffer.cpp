@@ -2,7 +2,7 @@
 
 CRingBuffer::CRingBuffer()
 {
-	arr = (char*)malloc(DEFAULTSIZE + 1);
+	arr = (char*)malloc(DEFAULTRINGBUFFERSIZE + 1);
 	if (arr == NULL)
 	{
 		DebugBreak();
@@ -10,7 +10,7 @@ CRingBuffer::CRingBuffer()
 
 	head = 0;
 	tail = 0;
-	max = DEFAULTSIZE + 1;
+	max = DEFAULTRINGBUFFERSIZE + 1;
 }
 
 CRingBuffer::CRingBuffer(int size)

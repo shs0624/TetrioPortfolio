@@ -573,7 +573,7 @@ void CNetServer::PostRelease(st_NetSession* ptr)
 	PostQueuedCompletionStatus(_NetIOCPHandle, 0, (ULONG_PTR)ptr, &_ReleaseOverlapped);
 }
 
-bool CNetServer::MakePacketHeader(RefCountPointer& cPacket)
+void CNetServer::MakePacketHeader(RefCountPointer& cPacket)
 {
 	short shSize = (*cPacket)->GetDataSize();
 

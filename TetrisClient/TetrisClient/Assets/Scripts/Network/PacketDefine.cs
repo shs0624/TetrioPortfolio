@@ -2,24 +2,6 @@
 /// 서버 Protocol.h(en_PACKET_TYPE)의 선언 순서를 그대로 옮긴 값입니다.
 /// en_PACKET_TYPE은 명시적 숫자 지정 없이 0부터 순서대로 매겨지는 enum이므로,
 /// 서버 Protocol.h에 항목이 추가/삭제되면 이 파일도 같이(같은 순서로) 갱신해야 합니다.
-///
-/// ⚠️ 서버 실제 코드 확인 결과, 아래 두 항목은 Protocol.h 주석의 설명과
-///    실제로 보내는 쪽 코드(태그)가 서로 반대로 되어 있습니다 (서버 버그로 추정).
-///    클라이언트는 "실제로 서버가 보내는 값" 기준으로 맞춰뒀습니다.
-///
-///    - TETRISLOGIN_RES_LOGIN(6) : 주석상 "로그인서버의 전체 로그인 응답"이지만,
-///      실제로는 TetrisServer_Packet.cpp::mpRESLogin() (게임서버의 단순 상태 응답)이 이 값을 씁니다.
-///    - TETRIS_RES_LOGIN(8) : 주석상 "게임서버의 단순 응답"이지만,
-///      실제로는 TetrisLoginServer_MakePacket.cpp::mpLoginRES() (로그인서버의 전체 응답,
-///      GameIP/GamePort/SessionKey 포함)이 이 값을 씁니다.
-///
-///    서버 쪽을 문서대로 고치실 거면 이 파일과 Client.cs의 관련 주석도 같이 뒤집어야 합니다.
-///
-/// ⚠️ 또한 TetrisLoginServer_MakePacket.cpp의 mpRegisterRES() / mpDupcheckRES()는
-///    현재 Protocol.h에 선언조차 안 된 en_PACKET_CS_TETRIS_RES_REGISTER를 참조하고 있어
-///    로그인 서버가 지금 상태로는 빌드되지 않을 가능성이 높습니다.
-///    TETRISLOGIN_RES_REGISTER / TETRISLOGIN_RES_DUPCHECK로 각각 나눠 고쳐야 합니다.
-///    (자세한 내용은 대화 중 리뷰 참고 — 이 파일은 "서버가 고쳐졌을 때의 의도된 값"으로 맞춰뒀습니다.)
 /// </summary>
 public enum PacketID : ushort
 {
@@ -46,5 +28,6 @@ public enum PacketID : ushort
     TETRIS_REQ_GAME_READY             = 15,
     TETRIS_RES_GAME_READY             = 16,
     TETRIS_SC_ACK_COUNTDOWN           = 17,
-    CHAT_REQ_HEARTBEAT                = 18,
+    TETRIS_REQ_HEARTBEAT              = 18,  // C -> S : 이 type을 word로 넣어야함
+    TETRISLOGIN_REQ_HEARTBEAT         = 19,  // C -> S : 로그인 서버 콜드 타임아웃 방지용 하트비트. 이 type을 word로 넣어야함
 }

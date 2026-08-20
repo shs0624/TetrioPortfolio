@@ -44,6 +44,17 @@ cpp_redis::client& TetrisServer::GetTLSRedisClient()
 	return client;
 }
 
+bool TetrisServer::OnAccept(ULONGLONG sessionID, SOCKADDR_IN clientAddr)
+{
+	_pLog._dwSessionCount++;
+	return true;
+}
+
+void TetrisServer::OnError(int errorcode, WCHAR* message)
+{
+
+}
+
 void TetrisServer::OnRecv(ULONGLONG sessionID, RefCountPointer& cPacket)
 {
 	WORD type;

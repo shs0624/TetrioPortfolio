@@ -2,7 +2,7 @@
 
 // 0 = 기본, R = 90도, 2 = 180도, L = 270도(반시계 90도) 
 // 게임 내의 블록들의 모양을 전부 미리 구현
-BYTE IBlock[4][4][4] =
+inline BYTE IBlock[4][4][4] =
 {
 	{ // 0
 		{0,0,0,0},
@@ -30,7 +30,7 @@ BYTE IBlock[4][4][4] =
 	}
 };
 
-BYTE OBlock[4][2][2] =
+inline BYTE OBlock[4][2][2] =
 {
 	{ // 0
 		{1,1},
@@ -50,7 +50,7 @@ BYTE OBlock[4][2][2] =
 	}
 };
 
-BYTE TBlock[4][3][3] =
+inline BYTE TBlock[4][3][3] =
 {
 	{ // 0
 		{0,1,0},
@@ -74,7 +74,7 @@ BYTE TBlock[4][3][3] =
 	}
 };
 
-BYTE SBlock[4][3][3] =
+inline BYTE SBlock[4][3][3] =
 {
 	{ // 0
 		{0,1,1},
@@ -98,7 +98,7 @@ BYTE SBlock[4][3][3] =
 	}
 };
 
-BYTE ZBlock[4][3][3] =
+inline BYTE ZBlock[4][3][3] =
 {
 	{ // 0
 		{1,1,0},
@@ -122,7 +122,7 @@ BYTE ZBlock[4][3][3] =
 	}
 };
 
-BYTE JBlock[4][3][3] =
+inline BYTE JBlock[4][3][3] =
 {
 	{ // 0
 		{1,0,0},
@@ -146,7 +146,7 @@ BYTE JBlock[4][3][3] =
 	}
 };
 
-BYTE LBlock[4][3][3] =
+inline BYTE LBlock[4][3][3] =
 {
 	{ // 0
 		{0,0,1},

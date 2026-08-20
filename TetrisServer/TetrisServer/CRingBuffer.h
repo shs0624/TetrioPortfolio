@@ -1,7 +1,7 @@
 #pragma once
 #include <iostream>
 #include <Windows.h>
-#define DEFAULTSIZE 1024
+#define DEFAULTRINGBUFFERSIZE 1024
 
 class CRingBuffer
 {
