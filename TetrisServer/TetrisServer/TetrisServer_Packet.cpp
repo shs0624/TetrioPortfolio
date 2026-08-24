@@ -17,6 +17,8 @@ void TetrisServer::mpRESChatMessage(RefCountPointer& cPacket, INT64 accountNum, 
 {
 	en_PACKET_TYPE packetType = en_PACKET_CS_TETRIS_REQ_CHAT_MESSAGE;
 
+	(**cPacket) << (WORD)packetType;
+
 	(**cPacket) << accountNum;
 	(*cPacket)->PutData((char*)nickname, sizeof(WCHAR) * 20);
 

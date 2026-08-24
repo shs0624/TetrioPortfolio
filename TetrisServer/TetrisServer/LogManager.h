@@ -8,7 +8,7 @@
 #define dfLOG_MAX 10000
 //#define MONITORING_ON
 
-struct stChatLog
+struct stServerLog
 {
 	LONG _dwRecvMessageTPS;
 	LONG _dwSendMessageTPS;
@@ -17,14 +17,23 @@ struct stChatLog
 	LONG _dwAcceptTPS;
 
 	LONG _dwSessionCount;
-	LONG _dwUserCount;
+	LONG _dwChatUserCount;
+	LONG _dwGameUserCount;
 
 	LONG _dwPacketPoolUse;
 	LONG _dwPlayerPoolUse;
 
-	LONG _dwMoveMessageTPS;
+	LONG _dwChatEnterMessageTPS;
+	LONG _dwChatEnterMessageTotal;
+
+	LONG _dwChatLeaveMessageTPS;
+	LONG _dwChatLeaveMessageTotal;
+
 	LONG _dwChatMessageTPS;
+	LONG _dwChatMessageTotal;
+
 	LONG _dwLoginMessageTPS;
+	LONG _dwLoginMessageTotal;
 
 	LONG _dwDuplicatedLoginTotal;
 	LONG _dwDecodeDisconnectTotal;
@@ -51,19 +60,19 @@ public:
 	}
 
 	// 외부의 스레드 저장소를
-	void RegisterLogStruct(stChatLog* pLog)
+	void RegisterLogStruct(stServerLog* pLog)
 	{
 		int idx = InterlockedIncrement(&_dwLogArrIdx);
 		_LogStructArr[idx] = pLog;
 	}
 
 	// 이걸로 로그 구조체를 할당해줌(TLS). 받는 스레드는 이 주소를 저장하고 사용
-	stChatLog* AllocLogStruct()
+	stServerLog* AllocLogStruct()
 	{
-		stChatLog* ptr = (stChatLog*)TlsGetValue(_dwTlsIdx);
+		stServerLog* ptr = (stServerLog*)TlsGetValue(_dwTlsIdx);
 		if (ptr == NULL)
 		{
-			ptr = (stChatLog*)malloc(sizeof(stChatLog));
+			ptr = (stServerLog*)malloc(sizeof(stServerLog));
 			int idx = InterlockedIncrement(&_dwLogArrIdx);
 			_LogStructArr[idx] = ptr;
 		}
@@ -78,15 +87,21 @@ public:
 		memset(&_stPrintLog, 0, sizeof(_stPrintLog));
 		for (int i = 1; i <= _dwLogArrIdx; i++)
 		{
-			_stPrintLog._dwUserCount += _LogStructArr[i]->_dwUserCount;
+			_stPrintLog._dwChatUserCount += _LogStructArr[i]->_dwChatUserCount;
+			_stPrintLog._dwGameUserCount += _LogStructArr[i]->_dwGameUserCount;
 			_stPrintLog._dwSessionCount += _LogStructArr[i]->_dwSessionCount;
 			_stPrintLog._dwAcceptTotal += _LogStructArr[i]->_dwAcceptTotal;
 			_stPrintLog._dwAcceptTPS += _LogStructArr[i]->_dwAcceptTPS;
 			_stPrintLog._dwRecvMessageTPS += _LogStructArr[i]->_dwRecvMessageTPS;
 			_stPrintLog._dwSendMessageTPS += _LogStructArr[i]->_dwSendMessageTPS;
 			_stPrintLog._dwLoginMessageTPS += _LogStructArr[i]->_dwLoginMessageTPS;
-			_stPrintLog._dwMoveMessageTPS += _LogStructArr[i]->_dwMoveMessageTPS;
+			_stPrintLog._dwChatEnterMessageTPS += _LogStructArr[i]->_dwChatEnterMessageTPS;
+			_stPrintLog._dwChatLeaveMessageTPS += _LogStructArr[i]->_dwChatLeaveMessageTPS;
 			_stPrintLog._dwChatMessageTPS += _LogStructArr[i]->_dwChatMessageTPS;
+			_stPrintLog._dwLoginMessageTotal += _LogStructArr[i]->_dwLoginMessageTotal;
+			_stPrintLog._dwChatEnterMessageTotal += _LogStructArr[i]->_dwChatEnterMessageTotal;
+			_stPrintLog._dwChatLeaveMessageTotal += _LogStructArr[i]->_dwChatLeaveMessageTotal;
+			_stPrintLog._dwChatMessageTotal += _LogStructArr[i]->_dwChatMessageTotal;
 			_stPrintLog._dwDuplicatedLoginTotal += _LogStructArr[i]->_dwDuplicatedLoginTotal;
 			_stPrintLog._dwDecodeDisconnectTotal += _LogStructArr[i]->_dwDecodeDisconnectTotal;
 			_stPrintLog._dwNotCorrectAccountNumTotal += _LogStructArr[i]->_dwNotCorrectAccountNumTotal;
@@ -107,8 +122,9 @@ public:
 	void PrintLog()
 	{
 		printf("==============================================================================\n");
-		printf("%-25s%5d\n", "User Count :", _stPrintLog._dwUserCount);
 		printf("%-25s%5d\n", "Session Count :", _stPrintLog._dwSessionCount);
+		printf("%-25s%5d\n", "Chat User Count :", _stPrintLog._dwChatUserCount);
+		printf("%-25s%5d\n", "Game User Count :", _stPrintLog._dwGameUserCount);
 		printf("%-25s%5d\n", "Accept  Total :", _stPrintLog._dwAcceptTotal);
 		printf("==============================================================================\n");
 		printf("%-25s%5d\n", "Accept TPS : ", _stPrintLog._dwAcceptTPS);
@@ -116,8 +132,14 @@ public:
 		printf("%-25s%5d\n", "SendPacket TPS : ", _stPrintLog._dwSendMessageTPS);
 		printf("==============================================================================\n");
 		printf("%-25s%5d\n", "Contents - Login TPS :", _stPrintLog._dwLoginMessageTPS);
-		printf("%-25s%5d\n", "Contents - Move  TPS :", _stPrintLog._dwMoveMessageTPS);
+		printf("%-25s%5d\n", "Contents - Chat Enter  TPS :", _stPrintLog._dwChatEnterMessageTPS);
 		printf("%-25s%5d\n", "Contents - Chat  TPS :", _stPrintLog._dwChatMessageTPS);
+		printf("%-25s%5d\n", "Contents - Chat Leave  TPS :", _stPrintLog._dwChatLeaveMessageTPS);
+		printf("==============================================================================\n");
+		printf("%-25s%5d\n", "Contents - Login Total :", _stPrintLog._dwLoginMessageTotal);
+		printf("%-25s%5d\n", "Contents - Chat Enter  Total :", _stPrintLog._dwChatEnterMessageTotal);
+		printf("%-25s%5d\n", "Contents - Chat  Total :", _stPrintLog._dwChatMessageTotal);
+		printf("%-25s%5d\n", "Contents - Chat Leave  Total :", _stPrintLog._dwChatLeaveMessageTotal);
 		printf("==============================================================================\n");
 		printf("%-25s%5d\n", "Duplicated Login Total :", _stPrintLog._dwDuplicatedLoginTotal);
 		printf("%-25s%5d\n", "Decode Disconnect Total :", _stPrintLog._dwDecodeDisconnectTotal);
@@ -167,7 +189,8 @@ private:
 
 			_LogStructArr[i]->_dwChatMessageTPS = 0;
 			_LogStructArr[i]->_dwLoginMessageTPS = 0;
-			_LogStructArr[i]->_dwMoveMessageTPS = 0;
+			_LogStructArr[i]->_dwChatEnterMessageTPS = 0;
+			_LogStructArr[i]->_dwChatLeaveMessageTPS = 0;
 
 			_LogStructArr[i]->_dwRecvMessageTPS = 0;
 			_LogStructArr[i]->_dwSendMessageTPS = 0;
@@ -227,12 +250,12 @@ private:
 	MonitorClient* _pMonitorClient;
 #endif
 
-	stChatLog _stPrintLog;
+	stServerLog _stPrintLog;
 
 	// 몇 번 TLS 주소에 구조체가 저장되어 있는가
 	DWORD _dwTlsIdx;
 	DWORD _dwLogArrIdx;
-	stChatLog* _LogStructArr[500];
+	stServerLog* _LogStructArr[500];
 
 	HANDLE _hLogUpdateEvent;
 	HANDLE _htpsThreadHandle;

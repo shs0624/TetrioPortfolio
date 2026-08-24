@@ -3,6 +3,7 @@ using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
@@ -41,6 +42,8 @@ public class Client : MonoBehaviour
     public enum NetState { Idle, LoginConnecting, LoginReady, GameConnecting, GameReady }
     public NetState State { get; private set; } = NetState.Idle;
     public bool IsConnected => _socket != null && _socket.Connected;
+    /// <summary>로그인 서버에서 로그인 성공 시 받은 내 AccountNum. 로비 유저 목록에서 "나"를 구분하는 데 쓴다.</summary>
+    public long MyAccountNum => _accountNum;
 
     // ── Wire format constants (서버 Protocol.h / NetServer.h 와 반드시 일치해야 함) ──
     const byte FIXED_KEY   = 0x32;  // 서버 _FixedKey  (암/복호화 키)
@@ -87,6 +90,23 @@ public class Client : MonoBehaviour
     public event Action OnGameServerConnected;
     /// <summary>소켓 오류 또는 서버 강제 종료 (사유 문자열)</summary>
     public event Action<string> OnDisconnected;
+
+    /// <summary>로비 채팅방 입장 알림 (accountNum, nickname)</summary>
+    public event Action<long, string> OnChatUserEnter;
+    /// <summary>로비 채팅방 퇴장 알림 (accountNum, nickname)</summary>
+    public event Action<long, string> OnChatUserExit;
+    /// <summary>로비 채팅 메시지 수신 (accountNum, nickname, message)</summary>
+    public event Action<long, string, string> OnChatMessage;
+
+    /// <summary>
+    /// 현재 로비 채팅방에 입장해 있는 유저 스냅샷 (accountNum -> nickname).
+    /// LobbyUI가 Start() 시점에 구독하기 전에 이미 도착한 ACK_CHAT_ENTER(특히 자기 자신 입장)가
+    /// 유실되는 레이스를 막기 위해, 서버가 ACK_CHAT_ENTER/EXIT를 보낼 때마다 이 딥셔너리를 갱신해둔다.
+    /// </summary>
+    readonly Dictionary<long, string> _chatRoster = new Dictionary<long, string>();
+
+    /// <summary>현재 채팅방 유저 스냅샷 (accountNum -> nickname). LobbyUI가 Start() 시점에 이것을 먼저 읽어 초기 목록을 채운다.</summary>
+    public IReadOnlyDictionary<long, string> ChatRoster => _chatRoster;
 
     // ── Unity lifecycle ───────────────────────────────────────────────
     void Awake()
@@ -418,6 +438,83 @@ public class Client : MonoBehaviour
     }
 
     // ════════════════════════════════════════════════════════════════════
+    // STEP 3 : 로비 채팅 (채팅 씬)
+    // ════════════════════════════════════════════════════════════════════
+
+    /// <summary>
+    /// 채팅 전송 버튼. 게임 서버 로그인 완료(GameReady) 상태에서만 보낼 수 있다.
+    /// 서버가 최대 100자까지만 읽으므로(TetrisServer_Message.cpp _MaxMessageLen) 클라이언트에서도 잘라서 보낸다.
+    /// </summary>
+    public void SendChatMessage(string message)
+    {
+        if (State != NetState.GameReady || !IsConnected)
+        {
+            Debug.LogWarning("[Client] SendChatMessage called but not in GameReady state.");
+            return;
+        }
+        if (string.IsNullOrEmpty(message)) return;
+
+        const int MAX_MSG_CHARS = 100;
+        if (message.Length > MAX_MSG_CHARS) message = message.Substring(0, MAX_MSG_CHARS);
+
+        byte[] msgBytes = Encoding.Unicode.GetBytes(message);
+        ushort msgLen   = (ushort)message.Length;
+
+        var body = new byte[2 + msgBytes.Length];
+        body[0] = (byte)(msgLen & 0xFF);
+        body[1] = (byte)((msgLen >> 8) & 0xFF);
+        Buffer.BlockCopy(msgBytes, 0, body, 2, msgBytes.Length);
+
+        SendToServer((ushort)PacketID.TETRIS_REQ_CHAT_MESSAGE, body);
+    }
+
+    // S -> C 채팅방 입장 알림. body: INT64 AccountNum(8) + WCHAR Nickname[20](40)
+    // S -> C 채팅방 입장 알림. body: INT64 AccountNum(8) + WCHAR Nickname[20](40)
+    void HandleChatEnter(byte[] body)
+    {
+        const int LEN = 8 + 20 * 2;
+        if (body.Length < LEN) { Debug.LogWarning("[Client] ChatEnter body too short."); return; }
+
+        long   accountNum = BitConverter.ToInt64(body, 0);
+        string nickname   = ReadFixedUtf16(body, 8, 20);
+        _chatRoster[accountNum] = nickname;
+        OnChatUserEnter?.Invoke(accountNum, nickname);
+    }
+
+    // S -> C 채팅방 퇴장 알림. body: INT64 AccountNum(8) + WCHAR Nickname[20](40)
+    // S -> C 채팅방 퇴장 알림. body: INT64 AccountNum(8) + WCHAR Nickname[20](40)
+    void HandleChatExit(byte[] body)
+    {
+        const int LEN = 8 + 20 * 2;
+        if (body.Length < LEN) { Debug.LogWarning("[Client] ChatExit body too short."); return; }
+
+        long   accountNum = BitConverter.ToInt64(body, 0);
+        string nickname   = ReadFixedUtf16(body, 8, 20);
+        _chatRoster.Remove(accountNum);
+        OnChatUserExit?.Invoke(accountNum, nickname);
+    }
+
+    // S -> C 채팅 메시지 브로드캐스트. body: INT64 AccountNum(8) + WCHAR Nickname[20](40) + WORD MessageLen(2) + WCHAR Message[MessageLen]
+    // ⚠️ 서버 TetrisServer_Packet.cpp::mpRESChatMessage()가 현재 WORD PacketID를 안 써서 보내고 있어
+    //    이 핸들러가 실제로 호출되려면 서버에 "(**cPacket) << (WORD)packetType;" 한 줄을 먼저 추가해야 한다.
+    void HandleChatMessage(byte[] body)
+    {
+        const int HEADER = 8 + 20 * 2 + 2;
+        if (body.Length < HEADER) { Debug.LogWarning("[Client] ChatMessage body too short."); return; }
+
+        long   accountNum = BitConverter.ToInt64(body, 0);
+        string nickname   = ReadFixedUtf16(body, 8, 20);
+        ushort msgLen     = BitConverter.ToUInt16(body, 48);
+
+        string message = "";
+        int msgBytes = msgLen * 2;
+        if (body.Length >= HEADER + msgBytes)
+            message = Encoding.Unicode.GetString(body, HEADER, msgBytes);
+
+        OnChatMessage?.Invoke(accountNum, nickname, message);
+    }
+
+    // ════════════════════════════════════════════════════════════════════
     // 연결 종료
     // ════════════════════════════════════════════════════════════════════
 
@@ -428,6 +525,7 @@ public class Client : MonoBehaviour
         StopHeartbeat(); // 디스콜 시 하트비트 중지
         CloseSocket();
         State = NetState.Idle;
+        _chatRoster.Clear(); // 재로그인 시 유령(stale) 유저가 남지 않도록 초기화
         Debug.Log("[Client] Disconnected.");
     }
 
@@ -567,6 +665,15 @@ public class Client : MonoBehaviour
                 break;
             case PacketID.TETRIS_RES_LOGIN:          // 게임서버의 단순 응답 (서버 태그 스왑 수정 반영)
                 HandleGameServerSimpleRes(body);
+                break;
+            case PacketID.TETRIS_ACK_CHAT_ENTER:
+                HandleChatEnter(body);
+                break;
+            case PacketID.TETRIS_ACK_CHAT_EXIT:
+                HandleChatExit(body);
+                break;
+            case PacketID.TETRIS_REQ_CHAT_MESSAGE:   // 서버가 같은 태그를 브로드캐스트에도 재사용함
+                HandleChatMessage(body);
                 break;
             default:
                 Debug.LogWarning("[Client] Unhandled packetID: " + packetID);

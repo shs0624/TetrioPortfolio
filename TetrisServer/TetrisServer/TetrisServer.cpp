@@ -63,7 +63,7 @@ void TetrisServer::OnRecv(ULONGLONG sessionID, RefCountPointer& cPacket)
 	// enum에 따라 다른 메세지 처리
 	switch ((en_PACKET_TYPE)type)
 	{
-	case en_PACKET_CS_TETRISLOGIN_REQ_LOGIN:
+	case en_PACKET_CS_TETRIS_REQ_LOGIN:
 		MessageProc_Login(sessionID, cPacket);
 		break;
 	case en_PACKET_CS_TETRIS_REQ_CHAT_MESSAGE:
@@ -90,16 +90,7 @@ void TetrisServer::OnRelease(ULONGLONG sessionID)
 		switch (pUser->enServerState)
 		{
 		case en_SERVER_CHAT:
-			AcquireSRWLockExclusive(&_ChatDataLock);
-			auto itChat = _ChatUserIndexMap.find(sessionID);
-			if (itChat != _ChatUserIndexMap.end())
-			{
-				swap(_ChatUserVec.back(), _ChatUserVec[(*itChat).second]);
-				_ChatUserVec.pop_back();
-			}
-
-			_ChatUserIndexMap.erase(sessionID);
-			ReleaseSRWLockExclusive(&_ChatDataLock);
+			LeaveChat(sessionID);
 			break;
 		}
 
@@ -112,7 +103,6 @@ void TetrisServer::OnRelease(ULONGLONG sessionID)
 
 		_UserPool->Free(pUser);
 
-		_pLog._dwUserCount--;
 		_pLog._dwPlayerPoolUse--;
 	}
 	else
@@ -163,4 +153,44 @@ void TetrisServer::OnMatchFound(LPVOID context, st_USER* pUser1, st_USER* pUser2
 
 	// 게임 방 생성
 	pServer->SetGameSession(pUser1, pUser2);
+}
+
+void TetrisServer::LeaveChat(ULONGLONG sessionID)
+{
+	AcquireSRWLockExclusive(&_ChatDataLock);
+
+	auto itChat = _ChatUserIndexMap.find(sessionID);
+	if (itChat != _ChatUserIndexMap.end())
+	{
+		RefCountPointer cPacket = RefCountPointer::MakeSharedPtr();
+		(*cPacket)->Clear(sizeof(st_NetHeader));
+
+		st_USER* pExitUser = _ChatUserVec[(*itChat).second];
+
+		mpACKChatExit(cPacket, pExitUser->AccountNum, pExitUser->NickName);
+		MakePacketHeader(cPacket);
+
+		// 자기 자신도 포함해서 RES를 보낼 것
+		for (int i = 0; i < _ChatUserVec.size(); i++)
+		{
+			cPacket.IncRefCount();
+			if (SendPacket_UniCast(_ChatUserVec[i]->ulSessionID, cPacket, false))
+			{
+				_pLog._dwChatLeaveMessageTotal++;
+				_pLog._dwChatLeaveMessageTPS++;
+			}
+		}
+
+		// 자신 포함해서 다 보냈으니 1을 줄이기
+		if (!cPacket.DecRefCount())
+			_pLog._dwPacketPoolUse--;
+
+		swap(_ChatUserVec.back(), _ChatUserVec[(*itChat).second]);
+		_ChatUserVec.pop_back();
+
+		_pLog._dwChatUserCount--;
+	}
+
+	_ChatUserIndexMap.erase(sessionID);
+	ReleaseSRWLockExclusive(&_ChatDataLock);
 }

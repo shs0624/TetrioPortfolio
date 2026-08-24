@@ -51,7 +51,32 @@ public class LobbyUI : MonoBehaviour
         if (_chatInput != null)
             _chatInput.onSubmit.AddListener(_ => OnSendChat());
 
+        if (Client.Instance != null)
+        {
+            // [레이스 방지] 서버가 로그인 직후 자기 자신의 ACK_CHAT_ENTER를 곳바로 보낼 수 있고,
+            // 그 경우 이 이벤트가 씨 로딩 중(LobbyUI.Start 이전)에 이미 도착해 유실될 수 있다.
+            // Client가 유지하는 현재 채팅방 스냅샷(ChatRoster)을 먼저 읽어 초기 목록을 채운다.
+            foreach (var kv in Client.Instance.ChatRoster)
+                AddUser(kv.Key, kv.Value);
+
+            Client.Instance.OnChatMessage   += HandleChatMessage;
+            Client.Instance.OnChatUserEnter += HandleChatUserEnter;
+            Client.Instance.OnChatUserExit  += HandleChatUserExit;
+        }
+        else
+        {
+            Debug.LogError("[LobbyUI] Client.Instance가 null입니다. LobbyScene에 Client 컴포넌트가 있는지 확인해주세요.");
+        }
+
         AddSystemMessage("Welcome to the lobby!");
+    }
+
+    void OnDestroy()
+    {
+        if (Client.Instance == null) return;
+        Client.Instance.OnChatMessage   -= HandleChatMessage;
+        Client.Instance.OnChatUserEnter -= HandleChatUserEnter;
+        Client.Instance.OnChatUserExit  -= HandleChatUserExit;
     }
 
     // ════════════════════════════════════════════════════════════════════
@@ -65,13 +90,12 @@ public class LobbyUI : MonoBehaviour
         _chatInput.text = "";
         _chatInput.ActivateInputField();
 
-        Debug.Log("[LobbyUI] Chat → " + msg);
-        // [SERVER_HOOK] NetworkManager.Instance.SendChat(msg);
+        Client.Instance?.SendChatMessage(msg);
     }
 
-    /// <summary>[SERVER_HOOK] Received a chat message from server.</summary>
-    public void OnChatReceived(string author, string content)
-        => AppendChat(author, content, C_AUTHOR, C_MSG);
+    /// <summary>Client.OnChatMessage 콜백 (accountNum, nickname, message) — "닉네임 - 메시지" 형태로 출력.</summary>
+    void HandleChatMessage(long accountNum, string nickname, string message)
+        => AppendChat(nickname, message, C_AUTHOR, C_MSG);
 
     /// <summary>System notice (white/green tint).</summary>
     public void AddSystemMessage(string content)
@@ -92,10 +116,11 @@ public class LobbyUI : MonoBehaviour
         csf.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
 
         var tmp = go.AddComponent<TextMeshProUGUI>();
+        // 사용자 입력(닉네임/메시지)은 <noparse>로 감싸서 리치텍스트 태그 주입을 방지한다.
         tmp.text = string.Format(
-            "<color=#{0}><b>[{1}]</b></color>  <color=#{2}>{3}</color>",
+            "<color=#{0}><b><noparse>{1}</noparse></b></color> - <color=#{2}><noparse>{3}</noparse></color>",
             ToHex(authorCol), author, ToHex(textCol), content);
-        tmp.fontSize           = 14f;
+        tmp.fontSize           = 30f;
         tmp.font               = _font;
         tmp.enableWordWrapping = true;
         tmp.raycastTarget      = false;
@@ -113,12 +138,20 @@ public class LobbyUI : MonoBehaviour
     // ── User list
     // ════════════════════════════════════════════════════════════════════
 
-    /// <summary>[SERVER_HOOK] A player entered the lobby.</summary>
-    public void AddUser(string username, int level)
-    {
-        if (_userContent == null || _users.ContainsKey(username)) return;
+    /// <summary>Client.OnChatUserEnter 콜백. 닉네임만 유저 목록에 추가하고, 채팅 메시지는 따로 출력하지 않는다.</summary>
+    void HandleChatUserEnter(long accountNum, string nickname) => AddUser(accountNum, nickname);
 
-        var go  = new GameObject("User_" + username);
+    /// <summary>Client.OnChatUserExit 콜백. 유저 목록에서만 제거한다.</summary>
+    void HandleChatUserExit(long accountNum, string nickname) => RemoveUser(nickname);
+
+    /// <summary>A player entered the lobby. 본인(accountNum == Client.MyAccountNum)은 항상 목록 맨 위에 고정한다.</summary>
+    public void AddUser(long accountNum, string nickname)
+    {
+        if (_userContent == null || _users.ContainsKey(nickname)) return;
+
+        bool isSelf = Client.Instance != null && accountNum == Client.Instance.MyAccountNum;
+
+        var go  = new GameObject("User_" + nickname);
         go.transform.SetParent(_userContent, false);
 
         var le  = go.AddComponent<LayoutElement>();
@@ -126,33 +159,37 @@ public class LobbyUI : MonoBehaviour
         le.flexibleWidth   = 1f;
 
         var tmp = go.AddComponent<TextMeshProUGUI>();
-        tmp.text = string.Format(
-            "<color=#{0}><b>Lv.{1}</b></color>   {2}",
-            ToHex(C_LEVEL), level, username);
-        tmp.fontSize      = 15f;
+        // 닉네임도 사용자 입력이므로 <noparse>로 감싸 리치텍스트 태그 주입을 방지한다.
+        tmp.text = isSelf
+            ? string.Format("<color=#{0}><b><noparse>{1}</noparse> (나)</b></color>", ToHex(C_LEVEL), nickname)
+            : string.Format("<noparse>{0}</noparse>", nickname);
+        tmp.fontSize      = 25f;
         tmp.color         = C_MSG;
         tmp.font          = _font;
         tmp.alignment     = TextAlignmentOptions.Left;
         tmp.raycastTarget = false;
 
-        _users[username] = go;
+        _users[nickname] = go;
+
+        // 자기 자신은 언제 입장 알림을 받든 항상 맨 위로 고정한다.
+        if (isSelf) go.transform.SetAsFirstSibling();
     }
 
-    /// <summary>[SERVER_HOOK] A player left the lobby.</summary>
-    public void RemoveUser(string username)
+    /// <summary>A player left the lobby. 목록에서만 제거하고 별도 채팅 메시지는 남기지 않는다.</summary>
+    public void RemoveUser(string nickname)
     {
-        if (!_users.TryGetValue(username, out var go)) return;
+        if (!_users.TryGetValue(nickname, out var go)) return;
         Destroy(go);
-        _users.Remove(username);
+        _users.Remove(nickname);
     }
 
-    /// <summary>[SERVER_HOOK] Full user-list snapshot from server.</summary>
-    public void SetUserList(string[] names, int[] levels)
+    /// <summary>[SERVER_HOOK] Full user-list snapshot from server (서버에 이 스냅샷 패킷이 아직 없음 — 필요 시 연동).</summary>
+    public void SetUserList(long[] accountNums, string[] nicknames)
     {
         foreach (var e in _users.Values) Destroy(e);
         _users.Clear();
-        for (int i = 0; i < names.Length; i++)
-            AddUser(names[i], i < levels.Length ? levels[i] : 1);
+        for (int i = 0; i < nicknames.Length; i++)
+            AddUser(i < accountNums.Length ? accountNums[i] : 0, nicknames[i]);
     }
 
     // ════════════════════════════════════════════════════════════════════

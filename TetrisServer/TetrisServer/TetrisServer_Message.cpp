@@ -158,18 +158,44 @@ void TetrisServer::MessageProc_Login(ULONGLONG sessionID, RefCountPointer& cPack
 	MakePacketHeader(chatEnterPacket);
 
 	AcquireSRWLockExclusive(&_ChatDataLock);
+	// 자기 자신에게 기존 유저들의 Enter 메세지를 보내야할듯
 	for (int i = 0; i < _ChatUserVec.size(); i++)
 	{
-		chatEnterPacket.IncRefCount();
-		SendPacket_UniCast(_ChatUserVec[i]->ulSessionID, chatEnterPacket, false);
+		RefCountPointer roomUserPacket = RefCountPointer::MakeSharedPtr();
+		(*roomUserPacket)->Clear(sizeof(st_NetHeader));
+		mpACKChatEnter(roomUserPacket, _ChatUserVec[i]->AccountNum, _ChatUserVec[i]->NickName);
+		MakePacketHeader(roomUserPacket);
+
+		if (SendPacket_UniCast(userPtr->ulSessionID, roomUserPacket, false))
+		{
+			_pLog._dwChatEnterMessageTotal++;
+			_pLog._dwChatEnterMessageTPS++;
+		}
 	}
 
 	int idx = _ChatUserVec.size();
 	_ChatUserVec.push_back(userPtr);
-	_ChatUserIndexMap[userPtr->AccountNum] = idx;
+	_ChatUserIndexMap[userPtr->ulSessionID] = idx;
+
+	for (int i = 0; i < _ChatUserVec.size(); i++)
+	{
+		chatEnterPacket.IncRefCount();
+		if (SendPacket_UniCast(_ChatUserVec[i]->ulSessionID, chatEnterPacket, false))
+		{
+			_pLog._dwChatEnterMessageTotal++;
+			_pLog._dwChatEnterMessageTPS++;
+		}		
+	}
+
+	// 자기 자신에게도 보냈으니 감소
+	if (!chatEnterPacket.DecRefCount())
+		_pLog._dwPacketPoolUse--;
+
+	_pLog._dwChatUserCount++;
 	ReleaseSRWLockExclusive(&_ChatDataLock);
 
 	_pLog._dwLoginMessageTPS++;
+	_pLog._dwLoginMessageTotal++;
 }
 
 void TetrisServer::MessageProc_ChatMessage(ULONGLONG sessionID, RefCountPointer& cPacket)
@@ -235,6 +261,7 @@ void TetrisServer::MessageProc_ChatMessage(ULONGLONG sessionID, RefCountPointer&
 		_pLog._dwPacketPoolUse--;
 
 	_pLog._dwChatMessageTPS++;
+	_pLog._dwChatMessageTotal++;
 }
 
 void TetrisServer::MessageProc_MatchingReq(ULONGLONG sessionID, RefCountPointer& cPacket)

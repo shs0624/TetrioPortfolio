@@ -9,7 +9,7 @@ DWORD _logID = 0;
 bool _bServerEnabled = true;
 
 // 빌드에러 방지를 위한 정의
-thread_local stChatLog CNetServer::_pLog;
+thread_local stServerLog CNetServer::_pLog;
 
 // thread-safe 락프리 스택
 int CNetServer::FindUsableSessionIndex()

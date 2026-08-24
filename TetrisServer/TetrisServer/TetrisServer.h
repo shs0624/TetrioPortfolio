@@ -17,6 +17,9 @@ public:
 			InitializeSRWLock(&_UserMapLock);
 			InitializeSRWLock(&_SessionMapLock);
 
+			_UserPool = new procademy::CMemoryPool_LockFree<st_USER>(maxConnection, false, false);
+			_SessionPool = new procademy::CMemoryPool_LockFree<st_SESSION>(maxConnection, false, false);
+
 			_hQuitEvent = CreateEvent(NULL, FALSE, FALSE, NULL);
 			
 			pMatchManager = new MatchingManager();
@@ -70,6 +73,8 @@ private:
 	static void OnMatchFound(LPVOID context, st_USER* pUser1, st_USER* pUser2);
 	bool SetGameSession(st_USER* pUser1, st_USER* pUser2);
 	void StartCountDown(st_GAMESESSION* pGameSession);
+	
+	void LeaveChat(ULONGLONG sessionID);
 
 	// 게임 틱 스레드 관리 -> 동시 게임 5000명 -> 스레드당 500개 관리
 	HANDLE _GameTickThreadHandleArr[10];
