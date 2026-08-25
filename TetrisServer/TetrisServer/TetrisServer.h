@@ -66,14 +66,18 @@ private:
 	void mpACKChatExit(RefCountPointer& cPacket, INT64 accountNum, WCHAR* nickname);
 
 	void mpRESMatching(RefCountPointer& cPacket, BYTE status);
+	void mpRESMatchingSuccess(RefCountPointer& cPacket, INT64 accountNum, INT64 opAccountNum, WCHAR* opNickname);
 	void mpRESGameReady(RefCountPointer& cPacket, BYTE status);
 	void mpACKCountDown(RefCountPointer& cPacket, WORD count);
 
 	// 함수 포인터에 전달하기 위해 static
 	static void OnMatchFound(LPVOID context, st_USER* pUser1, st_USER* pUser2);
 	bool SetGameSession(st_USER* pUser1, st_USER* pUser2);
+	void GameUpdate(st_GAMESESSION* pGameSession);
 	void StartCountDown(st_GAMESESSION* pGameSession);
+	void CheckCountDown(st_GAMESESSION* pGameSession);
 	
+	void EnterChat(st_USER* userPtr);
 	void LeaveChat(ULONGLONG sessionID);
 
 	// 게임 틱 스레드 관리 -> 동시 게임 5000명 -> 스레드당 500개 관리

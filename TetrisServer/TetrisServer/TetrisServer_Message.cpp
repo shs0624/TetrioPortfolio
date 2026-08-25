@@ -147,52 +147,7 @@ void TetrisServer::MessageProc_Login(ULONGLONG sessionID, RefCountPointer& cPack
 	mpRESLogin(cPacket, status);
 	SendPacket_UniCast(sessionID, cPacket);
 	
-	// 채팅 서버로의 입장
-	InterlockedExchange((LONG*)&(userPtr->enServerState), en_SERVER_CHAT);
-
-	// 채팅 벡터 내의 유저들 모두에게 채팅 메세지 전달
-	// 하나의 패킷을 여러 유저에게 보내는 방식
-	RefCountPointer chatEnterPacket = RefCountPointer::MakeSharedPtr();
-	(*chatEnterPacket)->Clear(sizeof(st_NetHeader));
-	mpACKChatEnter(chatEnterPacket, accountNum, Nickname);
-	MakePacketHeader(chatEnterPacket);
-
-	AcquireSRWLockExclusive(&_ChatDataLock);
-	// 자기 자신에게 기존 유저들의 Enter 메세지를 보내야할듯
-	for (int i = 0; i < _ChatUserVec.size(); i++)
-	{
-		RefCountPointer roomUserPacket = RefCountPointer::MakeSharedPtr();
-		(*roomUserPacket)->Clear(sizeof(st_NetHeader));
-		mpACKChatEnter(roomUserPacket, _ChatUserVec[i]->AccountNum, _ChatUserVec[i]->NickName);
-		MakePacketHeader(roomUserPacket);
-
-		if (SendPacket_UniCast(userPtr->ulSessionID, roomUserPacket, false))
-		{
-			_pLog._dwChatEnterMessageTotal++;
-			_pLog._dwChatEnterMessageTPS++;
-		}
-	}
-
-	int idx = _ChatUserVec.size();
-	_ChatUserVec.push_back(userPtr);
-	_ChatUserIndexMap[userPtr->ulSessionID] = idx;
-
-	for (int i = 0; i < _ChatUserVec.size(); i++)
-	{
-		chatEnterPacket.IncRefCount();
-		if (SendPacket_UniCast(_ChatUserVec[i]->ulSessionID, chatEnterPacket, false))
-		{
-			_pLog._dwChatEnterMessageTotal++;
-			_pLog._dwChatEnterMessageTPS++;
-		}		
-	}
-
-	// 자기 자신에게도 보냈으니 감소
-	if (!chatEnterPacket.DecRefCount())
-		_pLog._dwPacketPoolUse--;
-
-	_pLog._dwChatUserCount++;
-	ReleaseSRWLockExclusive(&_ChatDataLock);
+	EnterChat(userPtr);
 
 	_pLog._dwLoginMessageTPS++;
 	_pLog._dwLoginMessageTotal++;
@@ -300,7 +255,7 @@ void TetrisServer::MessageProc_GameReadyReq(ULONGLONG sessionID, RefCountPointer
 {
 	BYTE status = TRUE;
 
-	// 매칭 큐에 넣기
+	// 유저 찾기
 	AcquireSRWLockShared(&_UserMapLock);
 	auto it = _UserMap.find(sessionID);
 	if (it == _UserMap.end())
@@ -316,9 +271,9 @@ void TetrisServer::MessageProc_GameReadyReq(ULONGLONG sessionID, RefCountPointer
 	st_USER* userPtr = (*it).second;
 	ReleaseSRWLockShared(&_UserMapLock);
 
-	// 매칭 요청에 대한 응답
+	// 매칭 상태가 아니라면 실패
 	(*cPacket)->Clear(sizeof(st_NetHeader));
-	if (userPtr->enServerState != en_SERVER_GAME)
+	if (userPtr->enServerState != en_SERVER_MATCHING)
 	{
 		status = FALSE;
 		mpRESGameReady(cPacket, status);
@@ -326,6 +281,8 @@ void TetrisServer::MessageProc_GameReadyReq(ULONGLONG sessionID, RefCountPointer
 		SendPacket_UniCast(sessionID, cPacket);
 		return;
 	}
+
+	InterlockedExchange((LONG*)&userPtr->enServerState, en_SERVER_GAME);
 
 	(*cPacket)->Clear(sizeof(st_NetHeader));
 	mpRESGameReady(cPacket, status);

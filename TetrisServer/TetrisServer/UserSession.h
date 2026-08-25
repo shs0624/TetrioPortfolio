@@ -17,9 +17,16 @@ enum en_GAMESESSION_STATE : LONG
 };
 
 // 게임에서 쓰는 블록
-struct st_Stacker
+enum TetBlock 
 {
-	BYTE type;
+	None = 0,
+	IBlock,
+	OBlock,
+	TBlock,
+	SBlock,
+	ZBlock,
+	JBlock,
+	LBlock
 };
 
 // 유저별 게임 상황 구조체
@@ -27,14 +34,15 @@ struct st_GameInfo
 {
 	// [세로][가로]
 	BYTE _GameBoard[20][10];
-	// 홀딩한 블록 정보 없으면 -1
-	BYTE _HoldingBlock;
-	// 테트로미노 예고
-	BYTE _NextBlockArr[5];
 	// 공격받아 쌓인 라인
 	BYTE _GarbageLine;
 
-	// 현재 낙하중인 블록 정보 -> 추가 예정
+	// 테트로미노 예고
+	TetBlock _NextBlockArr[5];
+	// 홀딩한 블록
+	TetBlock _HoldingBlock;
+	// 현재 낙하중인 블록 정보
+	TetBlock _DropBlock;
 };
 
 // 게임이 진행되는 세션 (방)
@@ -43,6 +51,7 @@ struct st_GAMESESSION
 	SRWLOCK _GameSessionLock;
 	en_GAMESESSION_STATE _State;	// LONG
 	LONG _lReady;					// 둘 다 Ready인지 한번에 체크하기 위한 비트체크 -> idx를 활용해서 그 비트 변경
+	LONG startTime;					// 카운트 다운이 끝나는 시간
 
 	// 몇 번 인덱스인지는 유저가 들고있고, 자기 정보는 idx, 상대 정보는 1-idx	
 	st_GameInfo _GameInfoArr[2];

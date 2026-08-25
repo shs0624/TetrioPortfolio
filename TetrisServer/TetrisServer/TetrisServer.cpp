@@ -73,6 +73,7 @@ void TetrisServer::OnRecv(ULONGLONG sessionID, RefCountPointer& cPacket)
 		MessageProc_MatchingReq(sessionID, cPacket);
 		break;
 	case en_PACKET_CS_TETRIS_REQ_GAME_READY:
+		MessageProc_GameReadyReq(sessionID, cPacket);
 		break;
 	}
 }
@@ -138,7 +139,7 @@ void TetrisServer::OnMatchFound(LPVOID context, st_USER* pUser1, st_USER* pUser2
 	}
 
 	auto it2 = pServer->_ChatUserIndexMap.find(pUser2->ulSessionID);
-	if (it == pServer->_ChatUserIndexMap.end())
+	if (it2 == pServer->_ChatUserIndexMap.end())
 	{
 		DebugBreak();
 		return;
@@ -147,50 +148,11 @@ void TetrisServer::OnMatchFound(LPVOID context, st_USER* pUser1, st_USER* pUser2
 	pServer->_ChatUserIndexMap.erase(it);
 	pServer->_ChatUserIndexMap.erase(it2);
 
-	InterlockedExchange((LONG*)&pUser1->enServerState, en_SERVER_GAME);
-	InterlockedExchange((LONG*)&pUser2->enServerState, en_SERVER_GAME);
 	ReleaseSRWLockExclusive(&pServer->_ChatDataLock);
 
-	// 게임 방 생성
-	pServer->SetGameSession(pUser1, pUser2);
-}
-
-void TetrisServer::LeaveChat(ULONGLONG sessionID)
-{
-	AcquireSRWLockExclusive(&_ChatDataLock);
-
-	auto itChat = _ChatUserIndexMap.find(sessionID);
-	if (itChat != _ChatUserIndexMap.end())
+	// 게임 방 생성 후 매칭 성공 패킷 전송까지
+	if (!pServer->SetGameSession(pUser1, pUser2))
 	{
-		RefCountPointer cPacket = RefCountPointer::MakeSharedPtr();
-		(*cPacket)->Clear(sizeof(st_NetHeader));
-
-		st_USER* pExitUser = _ChatUserVec[(*itChat).second];
-
-		mpACKChatExit(cPacket, pExitUser->AccountNum, pExitUser->NickName);
-		MakePacketHeader(cPacket);
-
-		// 자기 자신도 포함해서 RES를 보낼 것
-		for (int i = 0; i < _ChatUserVec.size(); i++)
-		{
-			cPacket.IncRefCount();
-			if (SendPacket_UniCast(_ChatUserVec[i]->ulSessionID, cPacket, false))
-			{
-				_pLog._dwChatLeaveMessageTotal++;
-				_pLog._dwChatLeaveMessageTPS++;
-			}
-		}
-
-		// 자신 포함해서 다 보냈으니 1을 줄이기
-		if (!cPacket.DecRefCount())
-			_pLog._dwPacketPoolUse--;
-
-		swap(_ChatUserVec.back(), _ChatUserVec[(*itChat).second]);
-		_ChatUserVec.pop_back();
-
-		_pLog._dwChatUserCount--;
+		// @@TODO: 방 생성이 실패했는데 -> 연결끊김 / 세션 꽉참
 	}
-
-	_ChatUserIndexMap.erase(sessionID);
-	ReleaseSRWLockExclusive(&_ChatDataLock);
 }

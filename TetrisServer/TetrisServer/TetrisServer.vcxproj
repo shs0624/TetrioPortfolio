@@ -134,6 +134,7 @@
     <ClCompile Include="NetServer.cpp" />
     <ClCompile Include="ProcademyProfiler.cpp" />
     <ClCompile Include="TetrisServer.cpp" />
+    <ClCompile Include="TetrisServer_Chat.cpp" />
     <ClCompile Include="TetrisServer_GameLogic.cpp" />
     <ClCompile Include="TetrisServer_Message.cpp" />
     <ClCompile Include="TetrisServer_Packet.cpp" />

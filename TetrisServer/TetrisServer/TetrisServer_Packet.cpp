@@ -62,6 +62,17 @@ void TetrisServer::mpRESMatching(RefCountPointer& cPacket, BYTE status)
 	(**cPacket) << status;
 }
 
+void TetrisServer::mpRESMatchingSuccess(RefCountPointer& cPacket, INT64 accountNum, INT64 opAccountNum, WCHAR* opNickname)
+{
+	en_PACKET_TYPE packetType = en_PACKET_CS_TETRIS_RES_MATCHING_SUCCESS;
+
+	(**cPacket) << (WORD)packetType;
+	(**cPacket) << accountNum;
+	(**cPacket) << opAccountNum;
+
+	(*cPacket)->PutData((char*)opNickname, sizeof(WCHAR) * 20);
+}
+
 void TetrisServer::mpRESGameReady(RefCountPointer& cPacket, BYTE status)
 {
 	en_PACKET_TYPE packetType = en_PACKET_CS_TETRIS_RES_GAME_READY;
