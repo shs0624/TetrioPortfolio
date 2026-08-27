@@ -70,10 +70,18 @@ private:
 	void mpRESGameReady(RefCountPointer& cPacket, BYTE status);
 	void mpACKCountDown(RefCountPointer& cPacket, WORD count);
 
+	void mpACKBoardUpdate(RefCountPointer& cPacket, BYTE* pMyBoard, BYTE* pOpBoard);
+	void mpACKBlockUpdate(RefCountPointer& cPacket, BYTE blockType, BYTE rotate, BYTE x, BYTE y);
+
 	// 함수 포인터에 전달하기 위해 static
 	static void OnMatchFound(LPVOID context, st_USER* pUser1, st_USER* pUser2);
 	bool SetGameSession(st_USER* pUser1, st_USER* pUser2);
 	void GameUpdate(st_GAMESESSION* pGameSession);
+	void UpdatePlay(st_GAMESESSION* pGameSession);
+	void CreateBlock(st_GAMESESSION* pGameSession, int sessionIndex);
+	enTetBlock GetNextBlockType(st_GAMESESSION* pGameSession);
+	bool CanSpawnBlock(st_GameInfo* pGameInfo, enTetBlock block);
+
 	void StartCountDown(st_GAMESESSION* pGameSession);
 	void CheckCountDown(st_GAMESESSION* pGameSession);
 	

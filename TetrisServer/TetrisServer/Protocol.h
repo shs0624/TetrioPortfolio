@@ -270,7 +270,7 @@ enum en_PACKET_TYPE
 	//	}
 	//
 	//------------------------------------------------------------
-	en_PACKET_SC_TETRIS_ACK_GAME_BOARDUPDATE,
+	en_PACKET_SC_TETRIS_ACK_GAME_BLOCKUPDATE,
 
 	//------------------------------------------------------------
 	// 하트비트

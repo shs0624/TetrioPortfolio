@@ -80,3 +80,23 @@ void TetrisServer::mpRESGameReady(RefCountPointer& cPacket, BYTE status)
 	(**cPacket) << (WORD)packetType;
 	(**cPacket) << status;
 }
+
+void TetrisServer::mpACKBoardUpdate(RefCountPointer& cPacket, BYTE* pMyBoard, BYTE* pOpBoard)
+{
+	en_PACKET_TYPE packetType = en_PACKET_SC_TETRIS_ACK_GAME_BOARDUPDATE;
+
+	(**cPacket) << (WORD)packetType;
+	(*cPacket)->PutData((char*)pMyBoard, sizeof(BYTE) * 200);
+	(*cPacket)->PutData((char*)pOpBoard, sizeof(BYTE) * 200);
+}
+
+void TetrisServer::mpACKBlockUpdate(RefCountPointer& cPacket, BYTE blockType, BYTE rotate, BYTE x, BYTE y)
+{
+	en_PACKET_TYPE packetType = en_PACKET_SC_TETRIS_ACK_GAME_BLOCKUPDATE;
+
+	(**cPacket) << (WORD)packetType;
+	(**cPacket) << blockType;
+	(**cPacket) << rotate;
+	(**cPacket) << x;
+	(**cPacket) << y;
+}
