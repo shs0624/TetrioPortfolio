@@ -81,11 +81,14 @@ void TetrisServer::mpRESGameReady(RefCountPointer& cPacket, BYTE status)
 	(**cPacket) << status;
 }
 
-void TetrisServer::mpACKBoardUpdate(RefCountPointer& cPacket, BYTE* pMyBoard, BYTE* pOpBoard)
+void TetrisServer::mpACKBoardUpdate(RefCountPointer& cPacket, enTetBlock* NextBlockBag, BYTE* pMyBoard, BYTE* pOpBoard)
 {
 	en_PACKET_TYPE packetType = en_PACKET_SC_TETRIS_ACK_GAME_BOARDUPDATE;
 
 	(**cPacket) << (WORD)packetType;
+
+	for(int i = 0; i < 5; i++)
+		(**cPacket) << (WORD)NextBlockBag[i];
 	(*cPacket)->PutData((char*)pMyBoard, sizeof(BYTE) * 200);
 	(*cPacket)->PutData((char*)pOpBoard, sizeof(BYTE) * 200);
 }

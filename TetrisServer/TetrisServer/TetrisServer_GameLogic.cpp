@@ -85,6 +85,11 @@ bool TetrisServer::SetGameSession(st_USER* pUser1, st_USER* pUser2)
 		_GameSessionArr[targetIdx][targetSessionIdx]._GameInfoArr[i]._GarbageLine = 0;
 		_GameSessionArr[targetIdx][targetSessionIdx]._GameInfoArr[i]._HoldingBlock = NoneBlock;
 		_GameSessionArr[targetIdx][targetSessionIdx]._GameInfoArr[i]._DropBlock = NoneBlock;
+		_GameSessionArr[targetIdx][targetSessionIdx]._GameInfoArr[i]._BagHead = 0;
+		_GameSessionArr[targetIdx][targetSessionIdx]._GameInfoArr[i]._BagTail = _iBagMaxSize - 1;
+
+		GenerateBag(&_GameSessionArr[targetIdx][targetSessionIdx]._GameInfoArr[i]._NextBlockArr[0]);
+		GenerateBag(&_GameSessionArr[targetIdx][targetSessionIdx]._GameInfoArr[i]._NextBlockArr[7]);
 	}
 
 	pUser1->pGameSession = &_GameSessionArr[targetIdx][targetSessionIdx];
@@ -146,31 +151,134 @@ void TetrisServer::GameUpdate(st_GAMESESSION* pGameSession)
 
 void TetrisServer::UpdatePlay(st_GAMESESSION* pGameSession)
 {
+	// 드랍 시간을 체크하고, 시간이 지났으면 드랍중인 블록 한 칸 내리기
+	DWORD nowTime = timeGetTime();
 
+	for (int i = 0; i < 2; i++)
+	{
+		st_GameInfo* pGameInfo = &(pGameSession->_GameInfoArr[i]);
+		if ((nowTime - pGameInfo->_dwLastDropTime) > pGameSession->_dwDropTick)
+		{
+			// 한 칸 내리기
+			pGameInfo->_DropY += 1;
+			
+			// 내렸을 때 충돌 체크
+			if (!CollisionCheck(pGameInfo, pGameInfo->_DropBlock, pGameInfo->_DropRotate, pGameInfo->_DropX, pGameInfo->_DropY))
+			{
+				// 충돌했음. 보드 업데이트
+				for (int x = 0; x < BLOCK_ARR_LENGTH; x++)
+				{
+					int nx = pGameInfo->_DropX;
+					for (int y = 0; y < BLOCK_ARR_LENGTH; y++)
+					{
+						if (ShapeTable[pGameInfo->_DropBlock][pGameInfo->_DropRotate][y][x] == 0)
+							continue;
+
+						pGameInfo->_GameBoard[pGameInfo->_DropY + y][nx] = pGameInfo->_DropBlock;
+					}
+				}
+
+				// 여기서 보드 업데이트 메세지도 보내니까, 블록 생성 함수 호출
+				CreateBlock(pGameSession, i);
+			}
+			else
+			{
+				// 블록 업데이트
+				RefCountPointer blockUpdatePacket = RefCountPointer::MakeSharedPtr();
+				(*blockUpdatePacket)->Clear(sizeof(st_NetHeader));
+				mpACKBlockUpdate(blockUpdatePacket, pGameInfo->_DropBlock, 0, pGameInfo->_DropX, pGameInfo->_DropY);
+				MakePacketHeader(blockUpdatePacket);
+
+				if (!SendPacket_UniCast(pGameSession->_SessionIDArr[i], blockUpdatePacket, false))
+				{
+					// @@ TODO : 연결 끊김 처리
+					DebugBreak();
+					return;
+				}
+
+				// @@TODO : 로그찍기
+			}
+		}
+
+		pGameInfo->_dwLastDropTime = nowTime;
+	}
 }
 
-enTetBlock TetrisServer::GetNextBlockType(st_GAMESESSION* pGameSession)
+// 예정 블록 5개를 Bag 배열에 복사해서 넣어주기
+enTetBlock TetrisServer::GetNextBlockType(st_GameInfo* pGameInfo, enTetBlock* pBagArr)
 {
+	int head = pGameInfo->_BagHead;
+	int tail = pGameInfo->_BagTail;
 
+	enTetBlock nextBlock = pGameInfo->_NextBlockArr[head];
+	head += 1;
+
+	if (head >= _iBagMaxSize)
+		head = 0;
+
+	if (head == (_iBagMaxSize / 2))
+	{
+		GenerateBag(&pGameInfo->_NextBlockArr[0]);
+
+		tail = (_iBagMaxSize / 2) - 1;
+	}
+	else if (head == 0)
+	{
+		GenerateBag(&pGameInfo->_NextBlockArr[_iBagMaxSize / 2]);
+
+		tail = _iBagMaxSize - 1;
+	}
+
+	for (int i = 0; i < 5; i++)
+	{
+		pBagArr[i] = pGameInfo->_NextBlockArr[(head + i) % _iBagMaxSize];
+	}
+
+	pGameInfo->_BagHead = head;
+	pGameInfo->_BagTail = tail;
+
+	return nextBlock;
 }
 
-bool TetrisServer::CanSpawnBlock(st_GameInfo* pGameInfo, enTetBlock nextBlock)
+// 7개의 블록을 랜덤으로 섞는 함수
+void TetrisServer::GenerateBag(enTetBlock* pBag)
 {
-	int midX = (10 / 2);
-	bool flag = true;
+	pBag[0] = enIBlock;
+	pBag[1] = enOBlock;
+	pBag[2] = enTBlock;
+	pBag[3] = enSBlock;
+	pBag[4] = enZBlock;
+	pBag[5] = enJBlock;
+	pBag[6] = enLBlock;
+
+	// 6 5 4 3 2 1 에서 뽑고, 뽑힌 건 맨 끝에 배치해서 섞이지 않게 설정
+	for (int i = 6; i > 0; i--)
+	{
+		int j = rand() % (i + 1);       
+		enTetBlock temp = pBag[i];
+		pBag[i] = pBag[j];
+		pBag[j] = temp;
+	}
+}
+
+// 충돌하면 false, 정상이면 true
+bool TetrisServer::CollisionCheck(st_GameInfo* pGameInfo, enTetBlock block, int dropRotate, int dropX, int dropY)
+{
+	if (dropY >= 20)
+		return false;
+
+	// 충돌 체크
 	for (int x = 0; x < BLOCK_ARR_LENGTH; x++)
 	{
-		int nx = midX - 2 + x;
 		for (int y = 0; y < BLOCK_ARR_LENGTH; y++)
 		{
-			if (ShapeTable[nextBlock][0][y][x] == 0)
+			if (ShapeTable[block][dropRotate][y][x] == 0)
 				continue;
 
-			if (pGameInfo->_GameBoard[y][nx] != 0)
+			if (pGameInfo->_GameBoard[dropY][dropX] != 0)
 			{
 				return false;
 			}
-
 		}
 	}
 
@@ -182,10 +290,11 @@ void TetrisServer::CreateBlock(st_GAMESESSION* pGameSession, int sessionIndex)
 	//pGameSession->_GameInfoArr[sessionIndex];
 	st_GameInfo* pGameInfo = &(pGameSession->_GameInfoArr[sessionIndex]);
 
-	int midX = (10 / 2);
+	int midX = (10 / 2) - (_iShapeXSize / 2);
 
-	// @@TODO : 다음 타입 얻어오기
-	pGameInfo->_DropBlock = GetNextBlockType(pGameSession);
+	enTetBlock nextBlockBag[5];
+
+	pGameInfo->_DropBlock = GetNextBlockType(pGameInfo, nextBlockBag);
 	pGameInfo->_DropRotate = 0;
 	pGameInfo->_DropX = midX;
 	pGameInfo->_DropY = 0;
@@ -197,7 +306,8 @@ void TetrisServer::CreateBlock(st_GAMESESSION* pGameSession, int sessionIndex)
 	// 현재 보드 상태를 전송
 	RefCountPointer boardUpdatePacket = RefCountPointer::MakeSharedPtr();
 	(*boardUpdatePacket)->Clear(sizeof(st_NetHeader));
-	mpACKBoardUpdate(boardUpdatePacket,(BYTE*)(pGameSession->_GameInfoArr[sessionIndex]._GameBoard), (BYTE*)(pGameSession->_GameInfoArr[1 - sessionIndex]._GameBoard));
+	mpACKBoardUpdate(boardUpdatePacket, nextBlockBag, (BYTE*)(pGameSession->_GameInfoArr[sessionIndex]._GameBoard),
+		(BYTE*)(pGameSession->_GameInfoArr[1 - sessionIndex]._GameBoard));
 	MakePacketHeader(boardUpdatePacket);
 
 	if (!SendPacket_UniCast(pGameSession->_SessionIDArr[sessionIndex], boardUpdatePacket, false))
@@ -209,25 +319,13 @@ void TetrisServer::CreateBlock(st_GAMESESSION* pGameSession, int sessionIndex)
 
 	// @@TODO : 로그찍기
 
-	if (!CanSpawnBlock(pGameInfo, nextBlock))
+	if (!CollisionCheck(pGameInfo, nextBlock, 0, pGameInfo->_DropX, pGameInfo->_DropY))
 	{
 		// @@TODO : 게임오버 -> 패배
 		return;
 	}
 
 	// 스폰
-	//for (int x = 0; x < BLOCK_ARR_LENGTH; x++)
-	//{
-	//	int nx = midX - 2 + x;
-	//	for (int y = 0; y < BLOCK_ARR_LENGTH; y++)
-	//	{
-	//		if (ShapeTable[nextBlock][0][y][x] == 0)
-	//			continue;
-
-	//		pGameInfo->_GameBoard[y][nx] = nextBlock;
-	//	}
-	//}
-
 	RefCountPointer blockUpdatePacket = RefCountPointer::MakeSharedPtr();
 	(*blockUpdatePacket)->Clear(sizeof(st_NetHeader));
 	mpACKBlockUpdate(blockUpdatePacket, nextBlock, 0, pGameInfo->_DropX, pGameInfo->_DropY);

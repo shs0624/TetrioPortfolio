@@ -4,6 +4,9 @@
 // 0 = 기본, R = 90도, 2 = 180도, L = 270도(반시계 90도) 
 // 게임 내의 블록들의 모양을 전부 미리 구현
 
+inline const int _iShapeXSize = 4;
+inline const int _iShapeYSize = 4;
+
 inline const BYTE ShapeTable[8][4][4][4] =
 {
 	{

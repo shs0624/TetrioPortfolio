@@ -250,6 +250,7 @@ enum en_PACKET_TYPE
 	//	{
 	//		WORD	Type
 	//
+	//		WORD	NextBlockBag[5];
 	//		BYTE	MyBoard[20][10];
 	//		BYTE	OpponentBoard[20][10];
 	//	}

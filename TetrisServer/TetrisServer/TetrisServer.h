@@ -70,7 +70,7 @@ private:
 	void mpRESGameReady(RefCountPointer& cPacket, BYTE status);
 	void mpACKCountDown(RefCountPointer& cPacket, WORD count);
 
-	void mpACKBoardUpdate(RefCountPointer& cPacket, BYTE* pMyBoard, BYTE* pOpBoard);
+	void mpACKBoardUpdate(RefCountPointer& cPacket, enTetBlock* NextBlockBag, BYTE* pMyBoard, BYTE* pOpBoard);
 	void mpACKBlockUpdate(RefCountPointer& cPacket, BYTE blockType, BYTE rotate, BYTE x, BYTE y);
 
 	// 함수 포인터에 전달하기 위해 static
@@ -79,8 +79,11 @@ private:
 	void GameUpdate(st_GAMESESSION* pGameSession);
 	void UpdatePlay(st_GAMESESSION* pGameSession);
 	void CreateBlock(st_GAMESESSION* pGameSession, int sessionIndex);
-	enTetBlock GetNextBlockType(st_GAMESESSION* pGameSession);
-	bool CanSpawnBlock(st_GameInfo* pGameInfo, enTetBlock block);
+	enTetBlock GetNextBlockType(st_GameInfo* pGameInfo, enTetBlock* pBagArr);
+	void GenerateBag(enTetBlock* pBag);
+
+	void LineCheck(st_GameInfo* pGameInfo);
+	bool CollisionCheck(st_GameInfo* pGameInfo, enTetBlock block, int dropRotate, int dropX, int dropY);
 
 	void StartCountDown(st_GAMESESSION* pGameSession);
 	void CheckCountDown(st_GAMESESSION* pGameSession);
@@ -125,6 +128,8 @@ private:
 
 	// 종료 체크용 핸들
 	HANDLE _hQuitEvent;
+
+	const int _iBagMaxSize = 14;
 
 	const char _FixedKey = 0x32;
 	const char _ProgramKey = 0x77;

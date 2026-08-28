@@ -38,7 +38,10 @@ struct st_GameInfo
 	BYTE _GarbageLine;
 
 	// 테트로미노 예고
-	enTetBlock _NextBlockArr[5];
+	enTetBlock _NextBlockArr[14];
+	int _BagHead;
+	int _BagTail;
+
 	// 홀딩한 블록
 	enTetBlock _HoldingBlock;
 
@@ -47,6 +50,8 @@ struct st_GameInfo
 	BYTE _DropRotate;
 	BYTE _DropX;
 	BYTE _DropY;
+
+	DWORD _dwLastDropTime;
 };
 
 // 게임이 진행되는 세션 (방)
