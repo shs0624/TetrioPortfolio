@@ -49,6 +49,7 @@ public:
 	void MessageProc_ChatMessage(ULONGLONG sessionID, RefCountPointer& cPacket);
 	void MessageProc_MatchingReq(ULONGLONG sessionID, RefCountPointer& cPacket);
 	void MessageProc_GameReadyReq(ULONGLONG sessionID, RefCountPointer& cPacket);
+	void MessageProc_GameInput(ULONGLONG sessionID, RefCountPointer& cPacket);
 
 	//virtual bool OnConnectionRequest(ULONG ip, LONG port);
 	virtual bool OnAccept(ULONGLONG sessionID, SOCKADDR_IN clientAddr);
@@ -70,7 +71,7 @@ private:
 	void mpRESGameReady(RefCountPointer& cPacket, BYTE status);
 	void mpACKCountDown(RefCountPointer& cPacket, WORD count);
 
-	void mpACKBoardUpdate(RefCountPointer& cPacket, enTetBlock* NextBlockBag, BYTE* pMyBoard, BYTE* pOpBoard);
+	void mpACKBoardUpdate(RefCountPointer& cPacket, enTetBlock* NextBlockBag, BYTE* pMyBoard, BYTE* pOpBoard, BYTE clearCount = 0, BYTE clearY = 0);
 	void mpACKBlockUpdate(RefCountPointer& cPacket, BYTE blockType, BYTE rotate, BYTE x, BYTE y);
 
 	// 함수 포인터에 전달하기 위해 static
@@ -78,11 +79,21 @@ private:
 	bool SetGameSession(st_USER* pUser1, st_USER* pUser2);
 	void GameUpdate(st_GAMESESSION* pGameSession);
 	void UpdatePlay(st_GAMESESSION* pGameSession);
+	void UpdateBoard(st_GAMESESSION* pGameSession, int sessionIndex);
 	void CreateBlock(st_GAMESESSION* pGameSession, int sessionIndex);
 	enTetBlock GetNextBlockType(st_GameInfo* pGameInfo, enTetBlock* pBagArr);
 	void GenerateBag(enTetBlock* pBag);
+	void Attack(st_GAMESESSION* pGameSession, int sessionIndex, DWORD clearBit);
+	void Damage(st_GAMESESSION* pGameSession, int sessionIndex);
 
-	void LineCheck(st_GameInfo* pGameInfo);
+	void MoveLeft(st_GameInfo* pGameInfo);
+	void MoveRight(st_GameInfo* pGameInfo);
+	void SoftDrop(st_GameInfo* pGameInfo);
+	void HardDrop(st_GameInfo* pGameInfo);
+	void Rotate(st_GameInfo* pGameInfo, bool clockwise);
+	void Hold(st_GameInfo* pGameInfo, bool clockwise);
+
+	DWORD LineClear(st_GameInfo* pGameInfo, int dropY);
 	bool CollisionCheck(st_GameInfo* pGameInfo, enTetBlock block, int dropRotate, int dropX, int dropY);
 
 	void StartCountDown(st_GAMESESSION* pGameSession);
@@ -129,6 +140,8 @@ private:
 	// 종료 체크용 핸들
 	HANDLE _hQuitEvent;
 
+	const int _iMaxX = 10;
+	const int _iMaxY = 20;
 	const int _iBagMaxSize = 14;
 
 	const char _FixedKey = 0x32;

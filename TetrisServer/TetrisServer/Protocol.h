@@ -10,6 +10,18 @@ enum en_WORK_TYPE
 	en_WORK_RELEASE
 };
 
+enum en_INPUT_TYPE
+{
+	en_INPUT_None = 0,
+	en_INPUT_LEFT,
+	en_INPUT_RIGHT,
+	en_INPUT_SOFTDROP,
+	en_INPUT_HARDDROP,
+	en_INPUT_ROTATE_CLOCKWISE,
+	en_INPUT_ROTATE_COUNTERCLOCKWISE,
+	en_INPUT_HOLD
+};
+
 enum en_PACKET_TYPE
 {
 	////////////////////////////////////////////////////////
@@ -253,6 +265,10 @@ enum en_PACKET_TYPE
 	//		WORD	NextBlockBag[5];
 	//		BYTE	MyBoard[20][10];
 	//		BYTE	OpponentBoard[20][10];
+	// 
+	//		// 지워지는 줄 비트연산 필요
+	//		BYTE	ClearLineByte; 
+	//		BYTE	ClearY;
 	//	}
 	//
 	//------------------------------------------------------------
@@ -272,6 +288,19 @@ enum en_PACKET_TYPE
 	//
 	//------------------------------------------------------------
 	en_PACKET_SC_TETRIS_ACK_GAME_BLOCKUPDATE,
+
+	//------------------------------------------------------------
+	//  유저 인풋 패킷
+	//
+	//	{
+	//		WORD	Type
+	// 
+	//		INT64	AccountNum
+	//		DWORD	InputType
+	//	}
+	//
+	//------------------------------------------------------------
+	en_PACKET_CS_TETRIS_ACK_GAME_USERINPUT,
 
 	//------------------------------------------------------------
 	// 하트비트

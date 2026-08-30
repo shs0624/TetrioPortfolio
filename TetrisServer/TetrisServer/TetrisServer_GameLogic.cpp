@@ -285,12 +285,162 @@ bool TetrisServer::CollisionCheck(st_GameInfo* pGameInfo, enTetBlock block, int 
 	return true;
 }
 
-void TetrisServer::CreateBlock(st_GAMESESSION* pGameSession, int sessionIndex)
+// 락 처리 시점에 호출. 반환값이 0이 아니면 그 비트가 지워진 행.
+DWORD TetrisServer::LineClear(st_GameInfo* pGameInfo, int dropY)
 {
-	//pGameSession->_GameInfoArr[sessionIndex];
+	DWORD clearedMask = 0;
+
+	// 지워지는 라인 체크
+	for (int r = 0; r < BLOCK_ARR_LENGTH; r++) 
+	{
+		int boardRow = dropY + r;
+		if (boardRow < 0 || boardRow >= 20)
+			continue;
+
+		bool full = true;
+		for (int c = 0; c < 10; c++)
+		{
+			if (pGameInfo->_GameBoard[boardRow][c] == 0)
+			{
+				full = false;
+				break;   
+			}
+		}
+
+		if (full)
+			clearedMask |= (1 << boardRow);
+	}
+
+	// 빈 라인 채우기
+	int idx = (dropY + BLOCK_ARR_LENGTH - 1) >= _iMaxY ? _iMaxY - 1 : (dropY + BLOCK_ARR_LENGTH - 1);
+	for (int i = dropY + BLOCK_ARR_LENGTH - 1; i >= 0; i--)
+	{
+		// i번째 줄이 소멸됐으면
+		if (clearedMask & (1 << i))
+			continue;
+
+		memcpy(pGameInfo->_GameBoard[idx--], pGameInfo->_GameBoard[i], sizeof(BYTE) * _iMaxX);
+	}
+
+	for (; idx >= 0; idx--)
+	{
+		memset(pGameInfo->_GameBoard[idx], 0, sizeof(BYTE) * _iMaxX);
+	}
+
+	return clearedMask;
+}
+
+void TetrisServer::Attack(st_GAMESESSION* pGameSession, int sessionIndex, DWORD clearBit)
+{
+	st_GameInfo* pGameInfo = &(pGameSession->_GameInfoArr[sessionIndex]);
+	st_GameInfo* opGameInfo = &(pGameSession->_GameInfoArr[1 - sessionIndex]);
+
+	// 몇 줄 지워졌는지 비트 연산으로 체크
+	int clearedLines = 0;
+	for (DWORD m = clearBit; m; m >>= 1)
+		clearedLines += (m & 1);
+
+	// 공격 체크
+	int attackLine = 0;
+	if (clearedLines > 0)
+	{
+		pGameInfo->_Combo++;
+
+		if (clearedLines == 1)
+			attackLine = 0;
+		else
+			attackLine = 1 << (clearedLines - 2);
+
+		if (pGameInfo->_Combo >= 2 && pGameInfo->_Combo < 4)
+			attackLine += 1;
+		else if (pGameInfo->_Combo >= 4 && pGameInfo->_Combo < 6)
+			attackLine += 2;
+		else if (pGameInfo->_Combo >= 6 && pGameInfo->_Combo < 8)
+			attackLine += 3;
+		else if (pGameInfo->_Combo >= 8 && pGameInfo->_Combo < 11)
+			attackLine += 4;
+		else if (pGameInfo->_Combo >= 11)
+			attackLine += 5;
+
+		// 상쇄
+		if (pGameInfo->_GarbageLine >= attackLine)
+		{
+			pGameInfo->_GarbageLine -= attackLine;
+			return;
+		}
+		else
+		{
+			attackLine -= pGameInfo->_GarbageLine;
+			pGameInfo->_GarbageLine = 0;
+		}
+		
+		// 상쇄 후 공격이 남았으면 공격
+		if (attackLine > 0)
+			opGameInfo->_GarbageLine += attackLine;
+	}
+	else
+	{
+		pGameInfo->_Combo = 0;
+	}
+}
+
+void TetrisServer::Damage(st_GAMESESSION* pGameSession, int sessionIndex)
+{
+	st_GameInfo* pGameInfo = &(pGameSession->_GameInfoArr[sessionIndex]);
+	int garbageLine = pGameInfo->_GarbageLine;
+	if (pGameInfo->_GarbageLine > 0)
+	{
+		if (garbageLine >= _iMaxY)
+		{
+			// @@TODO:게임 오버 처리
+			return;
+		}
+
+		// garbageLine만큼 위로 올리기
+		for (int i = 0; i < _iMaxY - garbageLine; i++)
+		{
+			// i + garbageLine에 있는 줄을 위로 올리는 방식
+			memcpy(pGameInfo->_GameBoard[i], pGameInfo->_GameBoard[i + garbageLine], sizeof(BYTE) * _iMaxX);
+		}
+
+		// 데미지 라인 채우기
+		for (int i = _iMaxY - garbageLine; i < _iMaxY; i++)
+		{
+			int randX = rand() % _iMaxX;
+			for (int j = 0; j < _iMaxX; j++)
+				pGameInfo->_GameBoard[i][j] = (j == randX) ? 0 : enTetBlock::enGarbageBlock;
+		}
+
+		pGameInfo->_GarbageLine = 0;
+	}
+}
+
+void TetrisServer::UpdateBoard(st_GAMESESSION* pGameSession, int sessionIndex)
+{
 	st_GameInfo* pGameInfo = &(pGameSession->_GameInfoArr[sessionIndex]);
 
-	int midX = (10 / 2) - (_iShapeXSize / 2);
+	for (int x = 0; x < BLOCK_ARR_LENGTH; x++)
+	{
+		int nx = pGameInfo->_DropX;
+		for (int y = 0; y < BLOCK_ARR_LENGTH; y++)
+		{
+			if (ShapeTable[pGameInfo->_DropBlock][pGameInfo->_DropRotate][y][x] == 0)
+				continue;
+
+			pGameInfo->_GameBoard[pGameInfo->_DropY + y][nx] = pGameInfo->_DropBlock;
+		}
+	}
+
+	// 블록이 놓인 위치부터 +3까지 체크. 리턴값은 패킷으로 보낼 ClearLineByte로 지워지는 줄을 담은것.
+	DWORD clearBit = LineClear(pGameInfo, pGameInfo->_DropY);
+
+	// 공격/상쇄 체크
+	Attack(pGameSession, sessionIndex, clearBit);
+
+	// 받은 데미지가 있다면 그만큼 라인 생성
+	Damage(pGameSession, sessionIndex);
+	
+	int midX = (_iMaxX / 2) - (_iShapeXSize / 2);
 
 	enTetBlock nextBlockBag[5];
 
@@ -298,8 +448,6 @@ void TetrisServer::CreateBlock(st_GAMESESSION* pGameSession, int sessionIndex)
 	pGameInfo->_DropRotate = 0;
 	pGameInfo->_DropX = midX;
 	pGameInfo->_DropY = 0;
-
-	// @@TODO : 값 상수로 변경하기
 
 	enTetBlock nextBlock = pGameInfo->_DropBlock;
 
@@ -316,8 +464,16 @@ void TetrisServer::CreateBlock(st_GAMESESSION* pGameSession, int sessionIndex)
 		DebugBreak();
 		return;
 	}
+}
 
-	// @@TODO : 로그찍기
+void TetrisServer::CreateBlock(st_GAMESESSION* pGameSession, int sessionIndex)
+{
+	//pGameSession->_GameInfoArr[sessionIndex];
+	st_GameInfo* pGameInfo = &(pGameSession->_GameInfoArr[sessionIndex]);
+
+	enTetBlock nextBlock = pGameInfo->_DropBlock;
+
+	UpdateBoard(pGameSession, sessionIndex);
 
 	if (!CollisionCheck(pGameInfo, nextBlock, 0, pGameInfo->_DropX, pGameInfo->_DropY))
 	{

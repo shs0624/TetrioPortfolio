@@ -53,6 +53,9 @@
     <ClCompile Include="TetrisServer_Chat.cpp">
       <Filter>TetrisServer</Filter>
     </ClCompile>
+    <ClCompile Include="TetrisServer_Input.cpp">
+      <Filter>TetrisServer</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="CSerializationBuffer.h">

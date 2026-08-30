@@ -81,7 +81,7 @@ void TetrisServer::mpRESGameReady(RefCountPointer& cPacket, BYTE status)
 	(**cPacket) << status;
 }
 
-void TetrisServer::mpACKBoardUpdate(RefCountPointer& cPacket, enTetBlock* NextBlockBag, BYTE* pMyBoard, BYTE* pOpBoard)
+void TetrisServer::mpACKBoardUpdate(RefCountPointer& cPacket, enTetBlock* NextBlockBag, BYTE* pMyBoard, BYTE* pOpBoard, BYTE clearCount = 0, BYTE clearY = 0)
 {
 	en_PACKET_TYPE packetType = en_PACKET_SC_TETRIS_ACK_GAME_BOARDUPDATE;
 

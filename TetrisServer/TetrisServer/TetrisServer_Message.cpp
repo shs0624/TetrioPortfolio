@@ -303,3 +303,43 @@ void TetrisServer::MessageProc_GameReadyReq(ULONGLONG sessionID, RefCountPointer
 		}
 	}
 }
+
+void TetrisServer::MessageProc_GameInput(ULONGLONG sessionID, RefCountPointer& cPacket)
+{
+	// 유저 찾기
+	AcquireSRWLockShared(&_UserMapLock);
+	auto it = _UserMap.find(sessionID);
+	if (it == _UserMap.end())
+	{
+		ReleaseSRWLockShared(&_UserMapLock);
+		if (!cPacket.DecRefCount())
+			_pLog._dwPacketPoolUse--;
+
+		Disconnect(sessionID);
+		return;
+	}
+
+	st_USER* userPtr = (*it).second;
+	ReleaseSRWLockShared(&_UserMapLock);
+
+	en_INPUT_TYPE inputType;
+	(**cPacket) >> (DWORD&)inputType;
+
+	switch (inputType)
+	{
+	case en_INPUT_LEFT:
+		break;
+	case en_INPUT_RIGHT:
+		break;
+	case en_INPUT_SOFTDROP:
+		break;
+	case en_INPUT_HARDDROP:
+		break;
+	case en_INPUT_ROTATE_CLOCKWISE:
+		break;
+	case en_INPUT_ROTATE_COUNTERCLOCKWISE:
+		break;
+	case en_INPUT_HOLD:
+		break;
+	}
+}
