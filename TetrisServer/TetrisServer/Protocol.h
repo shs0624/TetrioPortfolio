@@ -25,7 +25,7 @@ enum en_INPUT_TYPE
 enum en_PACKET_TYPE
 {
 	////////////////////////////////////////////////////////
-	//q
+	//
 	//	Client & Server Protocol
 	//
 	////////////////////////////////////////////////////////
@@ -295,7 +295,6 @@ enum en_PACKET_TYPE
 	//	{
 	//		WORD	Type
 	// 
-	//		INT64	AccountNum
 	//		DWORD	InputType
 	//	}
 	//

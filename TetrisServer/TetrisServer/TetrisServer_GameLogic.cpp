@@ -168,7 +168,7 @@ void TetrisServer::UpdatePlay(st_GAMESESSION* pGameSession)
 				// 충돌했음. 보드 업데이트
 				for (int x = 0; x < BLOCK_ARR_LENGTH; x++)
 				{
-					int nx = pGameInfo->_DropX;
+					int nx = pGameInfo->_DropX + x;
 					for (int y = 0; y < BLOCK_ARR_LENGTH; y++)
 					{
 						if (ShapeTable[pGameInfo->_DropBlock][pGameInfo->_DropRotate][y][x] == 0)
@@ -264,7 +264,7 @@ void TetrisServer::GenerateBag(enTetBlock* pBag)
 // 충돌하면 false, 정상이면 true
 bool TetrisServer::CollisionCheck(st_GameInfo* pGameInfo, enTetBlock block, int dropRotate, int dropX, int dropY)
 {
-	if (dropY >= 20)
+	if (dropY >= _iMaxY)
 		return false;
 
 	// 충돌 체크
@@ -275,7 +275,17 @@ bool TetrisServer::CollisionCheck(st_GameInfo* pGameInfo, enTetBlock block, int 
 			if (ShapeTable[block][dropRotate][y][x] == 0)
 				continue;
 
-			if (pGameInfo->_GameBoard[dropY][dropX] != 0)
+			int nx = dropX + x;
+			int ny = dropY + y;
+
+			if (nx < 0 || nx >= _iMaxX || ny >= _iMaxY)
+				return false;
+
+			// 위 쪽은 허용
+			if (ny < 0)
+				continue;
+
+			if (pGameInfo->_GameBoard[ny][nx] != 0)
 			{
 				return false;
 			}
@@ -421,7 +431,7 @@ void TetrisServer::UpdateBoard(st_GAMESESSION* pGameSession, int sessionIndex)
 
 	for (int x = 0; x < BLOCK_ARR_LENGTH; x++)
 	{
-		int nx = pGameInfo->_DropX;
+		int nx = pGameInfo->_DropX + x;
 		for (int y = 0; y < BLOCK_ARR_LENGTH; y++)
 		{
 			if (ShapeTable[pGameInfo->_DropBlock][pGameInfo->_DropRotate][y][x] == 0)

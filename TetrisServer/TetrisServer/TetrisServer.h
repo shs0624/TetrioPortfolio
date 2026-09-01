@@ -86,12 +86,15 @@ private:
 	void Attack(st_GAMESESSION* pGameSession, int sessionIndex, DWORD clearBit);
 	void Damage(st_GAMESESSION* pGameSession, int sessionIndex);
 
-	void MoveLeft(st_GameInfo* pGameInfo);
-	void MoveRight(st_GameInfo* pGameInfo);
-	void SoftDrop(st_GameInfo* pGameInfo);
-	void HardDrop(st_GameInfo* pGameInfo);
-	void Rotate(st_GameInfo* pGameInfo, bool clockwise);
-	void Hold(st_GameInfo* pGameInfo, bool clockwise);
+	void MoveLeft(st_GAMESESSION* pGameSession, int sessionIndex, RefCountPointer& cPacket);
+	void MoveRight(st_GAMESESSION* pGameSession, int sessionIndex, RefCountPointer& cPacket);
+	void SoftDrop(st_GAMESESSION* pGameSession, int sessionIndex, RefCountPointer& cPacket);
+	void HardDrop(st_GAMESESSION* pGameSession, int sessionIndex, RefCountPointer& cPacket);
+	int GetHardDropY(st_GameInfo* pGameInfo);
+	void Rotate(st_GAMESESSION* pGameSession, int sessionIndex, bool clockwise, RefCountPointer& cPacket);
+	void Hold(st_GAMESESSION* pGameSession, int sessionIndex, RefCountPointer& cPacket);
+
+	const st_KickOffset* GetKicks(enTetBlock block, int fromRotate, bool clockwise);
 
 	DWORD LineClear(st_GameInfo* pGameInfo, int dropY);
 	bool CollisionCheck(st_GameInfo* pGameInfo, enTetBlock block, int dropRotate, int dropX, int dropY);

@@ -33,7 +33,7 @@ enum enTetBlock
 // 유저별 게임 상황 구조체
 struct st_GameInfo
 {
-	// [세로][가로]
+	// [세로][가로] - 0이 최상단 19가 최하단
 	BYTE _GameBoard[20][10];
 	// 공격받아 쌓인 라인
 	BYTE _GarbageLine;

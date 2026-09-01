@@ -76,7 +76,7 @@ void TetrisServer::OnRecv(ULONGLONG sessionID, RefCountPointer& cPacket)
 		MessageProc_GameReadyReq(sessionID, cPacket);
 		break;
 	case en_PACKET_CS_TETRIS_ACK_GAME_USERINPUT:
-
+		MessageProc_GameInput(sessionID, cPacket);
 		break;
 	}
 }

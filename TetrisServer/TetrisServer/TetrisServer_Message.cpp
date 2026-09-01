@@ -328,18 +328,25 @@ void TetrisServer::MessageProc_GameInput(ULONGLONG sessionID, RefCountPointer& c
 	switch (inputType)
 	{
 	case en_INPUT_LEFT:
+		MoveLeft(userPtr->pGameSession, userPtr->byGameSessionIndex, cPacket);
 		break;
 	case en_INPUT_RIGHT:
+		MoveRight(userPtr->pGameSession, userPtr->byGameSessionIndex, cPacket);
 		break;
 	case en_INPUT_SOFTDROP:
+		SoftDrop(userPtr->pGameSession, userPtr->byGameSessionIndex, cPacket);
 		break;
 	case en_INPUT_HARDDROP:
+		HardDrop(userPtr->pGameSession, userPtr->byGameSessionIndex, cPacket);
 		break;
 	case en_INPUT_ROTATE_CLOCKWISE:
+		Rotate(userPtr->pGameSession, userPtr->byGameSessionIndex, true, cPacket);
 		break;
 	case en_INPUT_ROTATE_COUNTERCLOCKWISE:
+		Rotate(userPtr->pGameSession, userPtr->byGameSessionIndex, false, cPacket);
 		break;
 	case en_INPUT_HOLD:
+		Hold(userPtr->pGameSession, userPtr->byGameSessionIndex, cPacket);
 		break;
 	}
 }
