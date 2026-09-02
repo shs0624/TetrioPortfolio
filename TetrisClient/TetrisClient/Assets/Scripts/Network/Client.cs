@@ -107,6 +107,8 @@ public class Client : MonoBehaviour
     public event Action<TetBlockType, TetBlockType[], byte[], byte[]> OnBoardUpdate;
     /// <summary>현재 낙하 중인 블록 갱신 (blockType, rotate, x, y) — x/y는 signed(음수 원점 가능)</summary>
     public event Action<TetBlockType, byte, sbyte, sbyte> OnBlockUpdate;
+    /// <summary>대기 중인 가비지(데미지) 줄 수 갱신 (본인 기준)</summary>
+    public event Action<int> OnDamageUpdate;
     /// <summary>매칭 요청 응답 (success) — true면 매칭 대기열에 들어간 것뿐, 상대방 매칭 완료는 별도 통지.</summary>
     public event Action<bool> OnMatchResponse;
     /// <summary>매칭 성공(상대방 확정) 통지 (opAccountNum, opNickname)</summary>
@@ -681,6 +683,19 @@ public class Client : MonoBehaviour
         OnBlockUpdate?.Invoke(blockType, rotate, x, y);
     }
 
+    // S -> C 대기 가비지(데미지) 갱신. body: DamageCount(1)
+    void HandleDamageUpdate(byte[] body)
+    {
+        if (body.Length < 1)
+        {
+            Debug.LogWarning("[Client] DamageUpdate body too short.");
+            return;
+        }
+
+        int count = body[0];
+        OnDamageUpdate?.Invoke(count);
+    }
+
     // ════════════════════════════════════════════════════════════════════
     // 연결 종료
     // ════════════════════════════════════════════════════════════════════
@@ -859,6 +874,9 @@ public class Client : MonoBehaviour
                 break;
             case PacketID.TETRIS_SC_ACK_GAME_BLOCKUPDATE:
                 HandleBlockUpdate(body);
+                break;
+            case PacketID.TETRIS_ACK_GAME_DAMAGE:
+                HandleDamageUpdate(body);
                 break;
             default:
                 Debug.LogWarning("[Client] Unhandled packetID: " + packetID);

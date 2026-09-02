@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
+using UnityEngine.InputSystem.Controls;
 
 /// <summary>
 /// GameScene의 컨트롤러. 블록 생성/라인 클리어/보드 갱신은 전부 서버 패킷이 주도하며,
@@ -27,6 +28,14 @@ public class GameManager : MonoBehaviour
     [Header("Hold Display")]
     public Transform holdDisplayRoot;   // world-space anchor (left of board)
 
+    [Header("Input Repeat")]
+    public float repeatIntervalSeconds = 0.1f; // LEFT/RIGHT/SOFTDROP을 꾹 누르고 있을 때 재전송 간격
+
+    // ── 반복 입력 타이머 (LEFT/RIGHT/SOFTDROP만 홀드 반복, 나머지는 1회성 유지) ─────
+    private float _leftRepeatTimer;
+    private float _rightRepeatTimer;
+    private float _softDropRepeatTimer;
+
     // ── Hold ─────────────────────────────────────────────────────────────────
     // BOARDUPDATE의 HoldingBlock 필드로 서버가 알려주는 값을 그대로 표시한다(클라이언트는 예측하지 않음).
     private TetBlockType? _heldType = null;
@@ -42,6 +51,9 @@ public class GameManager : MonoBehaviour
     // 아직 상대방 보드 렌더링 UI가 없어 데이터만 보관한다. (row-major, row0=서버 상단, 200바이트)
     private byte[] _lastOpponentBoard;
 
+    // ── Damage meter ─────────────────────────────────────────────────────────
+    private DamageMeterUI _damageMeter;
+
     // ── Unity lifecycle ──────────────────────────────────────────────────────
 
     private void Start()
@@ -53,6 +65,10 @@ public class GameManager : MonoBehaviour
 
         _countdownUI = new GameObject("CountdownUI").AddComponent<CountdownUI>();
 
+        _damageMeter = new GameObject("DamageMeter").AddComponent<DamageMeterUI>();
+        _damageMeter.Init(board, blockSprites, blockMaterial);
+        _damageMeter.SetCount(0); // 첫 패킷이 오기 전엔 빈 상태로 시작
+
         // [SERVER_HOOK] 매칭 후 게임 씬 진입 시 REQ_GAME_READY 전송, RES_GAME_READY / ACK_COUNTDOWN 응답 대기
         if (Client.Instance != null)
         {
@@ -60,6 +76,7 @@ public class GameManager : MonoBehaviour
             Client.Instance.OnCountdown         += OnServerCountdown;
             Client.Instance.OnBoardUpdate       += OnServerBoardUpdate;
             Client.Instance.OnBlockUpdate       += OnServerBlockUpdate;
+            Client.Instance.OnDamageUpdate      += OnServerDamageUpdate;
             Client.Instance.RequestGameReady();
         }
         else
@@ -76,6 +93,7 @@ public class GameManager : MonoBehaviour
             Client.Instance.OnCountdown         -= OnServerCountdown;
             Client.Instance.OnBoardUpdate       -= OnServerBoardUpdate;
             Client.Instance.OnBlockUpdate       -= OnServerBlockUpdate;
+            Client.Instance.OnDamageUpdate      -= OnServerDamageUpdate;
         }
     }
 
@@ -86,12 +104,10 @@ public class GameManager : MonoBehaviour
         var kb = Keyboard.current;
         if (kb == null) return;
 
-        if (kb.leftArrowKey.wasPressedThisFrame)
-            Client.Instance.SendGameInput(en_INPUT_TYPE.en_INPUT_LEFT);
-        if (kb.rightArrowKey.wasPressedThisFrame)
-            Client.Instance.SendGameInput(en_INPUT_TYPE.en_INPUT_RIGHT);
-        if (kb.downArrowKey.wasPressedThisFrame)
-            Client.Instance.SendGameInput(en_INPUT_TYPE.en_INPUT_SOFTDROP);
+        HandleRepeatableInput(kb.leftArrowKey,  en_INPUT_TYPE.en_INPUT_LEFT,     ref _leftRepeatTimer);
+        HandleRepeatableInput(kb.rightArrowKey, en_INPUT_TYPE.en_INPUT_RIGHT,    ref _rightRepeatTimer);
+        HandleRepeatableInput(kb.downArrowKey,  en_INPUT_TYPE.en_INPUT_SOFTDROP, ref _softDropRepeatTimer);
+
         if (kb.spaceKey.wasPressedThisFrame)
             Client.Instance.SendGameInput(en_INPUT_TYPE.en_INPUT_HARDDROP);
         if (kb.upArrowKey.wasPressedThisFrame || kb.xKey.wasPressedThisFrame)
@@ -108,6 +124,34 @@ public class GameManager : MonoBehaviour
         && Client.Instance != null
         && piece != null
         && piece.BlockType != TetBlockType.NoneBlock;
+
+    /// <summary>
+    /// 누르는 순간 1회 즉시 전송하고, 계속 누르고 있으면 repeatIntervalSeconds 간격으로 재전송한다.
+    /// 뗀 상태면 타이머를 리셋해 다음에 눌렀을 때 다시 즉시 전송되도록 한다.
+    /// </summary>
+    private void HandleRepeatableInput(ButtonControl key, en_INPUT_TYPE input, ref float timer)
+    {
+        if (key.wasPressedThisFrame)
+        {
+            Client.Instance.SendGameInput(input);
+            timer = 0f;
+            return;
+        }
+
+        if (key.isPressed)
+        {
+            timer += Time.deltaTime;
+            if (timer >= repeatIntervalSeconds)
+            {
+                timer -= repeatIntervalSeconds;
+                Client.Instance.SendGameInput(input);
+            }
+        }
+        else
+        {
+            timer = 0f;
+        }
+    }
 
     // ── Hold Display ─────────────────────────────────────────────────────────
 
@@ -178,6 +222,9 @@ public class GameManager : MonoBehaviour
     /// <summary>Client.OnBlockUpdate 콜백. 현재 낙하 중인 블록 위치/모양을 갱신한다.</summary>
     private void OnServerBlockUpdate(TetBlockType blockType, byte rotate, sbyte x, sbyte y)
         => piece.ApplyServerState(board, blockType, rotate, x, y);
+
+    /// <summary>Client.OnDamageUpdate 콜백. 대기 중인 가비지 미터를 갱신한다.</summary>
+    private void OnServerDamageUpdate(int count) => _damageMeter.SetCount(count);
 
     public void OnServerGameOver() { _gameOver = true; }
 

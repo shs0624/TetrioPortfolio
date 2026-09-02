@@ -92,8 +92,6 @@ void TetrisServer::SoftDrop(st_GAMESESSION* pGameSession, int sessionIndex, RefC
 		if (!cPacket.DecRefCount())
 			_pLog._dwPacketPoolUse--;
 
-		pGameInfo->_DropY += 1;
-
 		CreateBlock(pGameSession, sessionIndex);
 
 		return;

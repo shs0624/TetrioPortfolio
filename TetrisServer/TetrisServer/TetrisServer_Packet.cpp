@@ -105,3 +105,11 @@ void TetrisServer::mpACKBlockUpdate(RefCountPointer& cPacket, BYTE blockType, BY
 	(**cPacket) << (char)x;
 	(**cPacket) << (char)y;
 }
+
+void TetrisServer::mpACKDamage(RefCountPointer& cPacket, BYTE damageCount)
+{
+	en_PACKET_TYPE packetType = en_PACKET_CS_TETRIS_ACK_GAME_DAMAGE;
+
+	(**cPacket) << (WORD)packetType;
+	(**cPacket) << damageCount;
+}

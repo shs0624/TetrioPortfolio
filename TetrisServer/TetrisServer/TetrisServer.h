@@ -73,6 +73,7 @@ private:
 
 	void mpACKBoardUpdate(RefCountPointer& cPacket, enTetBlock holdingBlock, enTetBlock* NextBlockBag, BYTE* pMyBoard, BYTE* pOpBoard, BYTE clearCount = 0, BYTE clearY = 0);
 	void mpACKBlockUpdate(RefCountPointer& cPacket, BYTE blockType, BYTE rotate, signed char x, signed char y);
+	void mpACKDamage(RefCountPointer& cPacket, BYTE damageCount);
 
 	// 함수 포인터에 전달하기 위해 static
 	static void OnMatchFound(LPVOID context, st_USER* pUser1, st_USER* pUser2);

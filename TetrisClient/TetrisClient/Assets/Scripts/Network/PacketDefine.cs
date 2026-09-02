@@ -33,12 +33,16 @@ public enum PacketID : ushort
     TETRIS_SC_ACK_GAME_BOARDUPDATE     = 18,
     // S -> C : BlockType(1, enTetBlock) + Rotate(1) + X(1, signed char) + Y(1, signed char)
     TETRIS_SC_ACK_GAME_BLOCKUPDATE     = 19,
+    // S -> C : DamageCount(1, BYTE) — 아직 적용 안 된 대기 가비지 줄 수(받는 사람 자신 기준)
+    TETRIS_ACK_GAME_DAMAGE             = 20,
     // C -> S : InputType(4, en_INPUT_TYPE) — AccountNum 없음(서버가 세션ID로 유저 식별)
-    TETRIS_ACK_GAME_USERINPUT          = 20,
+    TETRIS_ACK_GAME_USERINPUT          = 21,
+    // C -> S : InputType(4) — 서버 Protocol.h 주석이 USERINPUT과 동일하게 되어있음(서버 쪽 오탈자로 보임). 처리 로직은 아직 없음.
+    TETRIS_ACK_GAME_RESULT              = 22,
 
-    TETRIS_REQ_HEARTBEAT              = 21,  // C -> S : 이 type을 word로 넣어야함 (서버 en_PACKET_CS_CHAT_REQ_HEARTBEAT)
+    TETRIS_REQ_HEARTBEAT              = 23,  // C -> S : 이 type을 word로 넣어야함 (서버 en_PACKET_CS_CHAT_REQ_HEARTBEAT)
 
     // ⚠️ 서버 Protocol.h에 대응 항목이 없음 (기존부터 있던 불일치, 이번 작업 범위 밖).
     // 값 충돌만 피하도록 뒤로 밀어둠 — 로그인 하트비트 기능은 별도로 확인 필요.
-    TETRISLOGIN_REQ_HEARTBEAT         = 22,
+    TETRISLOGIN_REQ_HEARTBEAT         = 24,
 }

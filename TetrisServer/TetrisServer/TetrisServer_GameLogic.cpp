@@ -168,18 +168,6 @@ void TetrisServer::UpdatePlay(st_GAMESESSION* pGameSession)
 			// 내렸을 때 충돌 체크
 			if (!CollisionCheck(pGameInfo, pGameInfo->_DropBlock, pGameInfo->_DropRotate, pGameInfo->_DropX, pGameInfo->_DropY))
 			{
-				// 충돌했음. 보드 업데이트
-				//for (int x = 0; x < BLOCK_ARR_LENGTH; x++)
-				//{
-				//	int nx = pGameInfo->_DropX + x;
-				//	for (int y = 0; y < BLOCK_ARR_LENGTH; y++)
-				//	{
-				//		if (ShapeTable[pGameInfo->_DropBlock][pGameInfo->_DropRotate][y][x] == 0)
-				//			continue;
-
-				//		pGameInfo->_GameBoard[pGameInfo->_DropY + y][nx] = pGameInfo->_DropBlock;
-				//	}
-				//}
 				pGameInfo->_DropY -= 1;
 
 				// 여기서 보드 업데이트 메세지도 보내니까, 블록 생성 함수 호출
@@ -397,7 +385,6 @@ void TetrisServer::Attack(st_GAMESESSION* pGameSession, int sessionIndex, DWORD 
 		if (pGameInfo->_GarbageLine >= attackLine)
 		{
 			pGameInfo->_GarbageLine -= attackLine;
-			return;
 		}
 		else
 		{
@@ -408,6 +395,18 @@ void TetrisServer::Attack(st_GAMESESSION* pGameSession, int sessionIndex, DWORD 
 		// 상쇄 후 공격이 남았으면 공격
 		if (attackLine > 0)
 			opGameInfo->_GarbageLine += attackLine;
+
+		// 상대 데미지 알림 전송
+		RefCountPointer damagePacket = RefCountPointer::MakeSharedPtr();
+		(*damagePacket)->Clear(sizeof(st_NetHeader));
+		mpACKDamage(damagePacket, opGameInfo->_GarbageLine);
+
+		if (!SendPacket_UniCast(pGameSession->_SessionIDArr[1 - sessionIndex], damagePacket))
+		{
+			// @@ TODO : 연결 끊김 처리
+			DebugBreak();
+			return;
+		}
 	}
 	else
 	{
@@ -443,6 +442,18 @@ void TetrisServer::Damage(st_GAMESESSION* pGameSession, int sessionIndex)
 		}
 
 		pGameInfo->_GarbageLine = 0;
+
+		// 현재 데미지 알림 전송
+		RefCountPointer damagePacket = RefCountPointer::MakeSharedPtr();
+		(*damagePacket)->Clear(sizeof(st_NetHeader));
+		mpACKDamage(damagePacket, pGameInfo->_GarbageLine);
+
+		if (!SendPacket_UniCast(pGameSession->_SessionIDArr[sessionIndex], damagePacket))
+		{
+			// @@ TODO : 연결 끊김 처리
+			DebugBreak();
+			return;
+		}
 	}
 }
 
