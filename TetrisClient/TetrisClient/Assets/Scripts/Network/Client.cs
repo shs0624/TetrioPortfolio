@@ -44,6 +44,8 @@ public class Client : MonoBehaviour
     public bool IsConnected => _socket != null && _socket.Connected;
     /// <summary>로그인 서버에서 로그인 성공 시 받은 내 AccountNum. 로비 유저 목록에서 "나"를 구분하는 데 쓴다.</summary>
     public long MyAccountNum => _accountNum;
+    /// <summary>내 닉네임. 게임서버 로그인 직후 서버가 보내는 자기 자신의 ACK_CHAT_ENTER에서 기억해둔다.</summary>
+    public string MyNickname { get; private set; } = "";
 
     // ── Wire format constants (서버 Protocol.h / NetServer.h 와 반드시 일치해야 함) ──
     const byte FIXED_KEY   = 0x32;  // 서버 _FixedKey  (암/복호화 키)
@@ -97,6 +99,18 @@ public class Client : MonoBehaviour
     public event Action<long, string> OnChatUserExit;
     /// <summary>로비 채팅 메시지 수신 (accountNum, nickname, message)</summary>
     public event Action<long, string, string> OnChatMessage;
+    /// <summary>게임 시작 준비 완료(RES_GAME_READY) 응답 수신 (success)</summary>
+    public event Action<bool> OnGameReadyResponse;
+    /// <summary>카운트다운 시작 통지 (seconds) — 이후 진행은 클라이언트가 독자적으로 연출한다.</summary>
+    public event Action<int> OnCountdown;
+    /// <summary>보드 스냅샷 수신 (holdingBlock, nextBag[5], myBoard[200], opponentBoard[200] — 보드 둘 다 row-major, row0=서버 상단)</summary>
+    public event Action<TetBlockType, TetBlockType[], byte[], byte[]> OnBoardUpdate;
+    /// <summary>현재 낙하 중인 블록 갱신 (blockType, rotate, x, y) — x/y는 signed(음수 원점 가능)</summary>
+    public event Action<TetBlockType, byte, sbyte, sbyte> OnBlockUpdate;
+    /// <summary>매칭 요청 응답 (success) — true면 매칭 대기열에 들어간 것뿐, 상대방 매칭 완료는 별도 통지.</summary>
+    public event Action<bool> OnMatchResponse;
+    /// <summary>매칭 성공(상대방 확정) 통지 (opAccountNum, opNickname)</summary>
+    public event Action<long, string> OnMatchSuccess;
 
     /// <summary>
     /// 현재 로비 채팅방에 입장해 있는 유저 스냅샷 (accountNum -> nickname).
@@ -478,6 +492,7 @@ public class Client : MonoBehaviour
         long   accountNum = BitConverter.ToInt64(body, 0);
         string nickname   = ReadFixedUtf16(body, 8, 20);
         _chatRoster[accountNum] = nickname;
+        if (accountNum == _accountNum) MyNickname = nickname; // 자기 자신의 입장 알림 — 닉네임 기억
         OnChatUserEnter?.Invoke(accountNum, nickname);
     }
 
@@ -512,6 +527,158 @@ public class Client : MonoBehaviour
             message = Encoding.Unicode.GetString(body, HEADER, msgBytes);
 
         OnChatMessage?.Invoke(accountNum, nickname, message);
+    }
+
+    // ════════════════════════════════════════════════════════════════════
+    // STEP 4 : 게임 시작 준비 (게임 씬)
+    // ════════════════════════════════════════════════════════════════════
+
+    /// <summary>
+    /// 게임 씬 진입 시 1회 호출. 게임 서버에 REQ_GAME_READY를 보내고,
+    /// 결과는 OnGameReadyResponse 이벤트(RES_GAME_READY 수신)로 통지된다.
+    /// </summary>
+    public void RequestGameReady()
+    {
+        if (State != NetState.GameReady || !IsConnected)
+        {
+            Debug.LogWarning("[Client] RequestGameReady called but not connected to game server.");
+            return;
+        }
+
+        var body = new byte[8];
+        Buffer.BlockCopy(BitConverter.GetBytes(_accountNum), 0, body, 0, 8);
+        SendToServer((ushort)PacketID.TETRIS_REQ_GAME_READY, body);
+        Debug.Log("[Client] REQ_GAME_READY sent.");
+    }
+
+    // S -> C 게임 시작 준비 완료 응답. body: Status(1)
+    void HandleGameReadyRes(byte[] body)
+    {
+        bool ok = body.Length > 0 && body[0] == 1;
+        Debug.Log($"[Client] RES_GAME_READY received. Status={(ok ? "OK" : "FAIL")}");
+        OnGameReadyResponse?.Invoke(ok);
+    }
+
+    // S -> C 카운트다운 시작. body: WORD Count(2, 초 단위)
+    void HandleCountdown(byte[] body)
+    {
+        if (body.Length < 2)
+        {
+            Debug.LogWarning("[Client] Countdown body too short.");
+            return;
+        }
+
+        ushort count = BitConverter.ToUInt16(body, 0);
+        Debug.Log($"[Client] ACK_COUNTDOWN received. Count={count}");
+        OnCountdown?.Invoke(count);
+    }
+
+    /// <summary>
+    /// 매칭 버튼. body: AccountNum(8) + Nickname[20](UTF-16). 서버가 세션ID로만 유저를 식별하고
+    /// 이 body를 읽지 않는 것을 확인했지만(TetrisServer_Message.cpp::MessageProc_MatchingReq),
+    /// 와이어 포맷은 스펙대로 채워 보낸다.
+    /// </summary>
+    public void SendMatchRequest()
+    {
+        if (State != NetState.GameReady || !IsConnected)
+        {
+            Debug.LogWarning("[Client] SendMatchRequest called but not connected to game server.");
+            return;
+        }
+
+        var body = new byte[8 + NICK_FIELD_LEN * 2];
+        Buffer.BlockCopy(BitConverter.GetBytes(_accountNum), 0, body, 0, 8);
+        WriteFixedUtf16(body, 8, MyNickname, NICK_FIELD_LEN);
+        SendToServer((ushort)PacketID.TETRIS_REQ_MATCHING, body);
+    }
+
+    // S -> C 매칭 요청 응답. body: Status(1) — 0:실패 1:성공(대기열 진입)
+    void HandleMatchingRes(byte[] body)
+    {
+        bool ok = body.Length > 0 && body[0] == 1;
+        Debug.Log($"[Client] RES_MATCHING received. Status={(ok ? "OK" : "FAIL")}");
+        OnMatchResponse?.Invoke(ok);
+    }
+
+    // S -> C 매칭 성공(상대방 확정). body: AccountNum(8) + OpAccountNum(8) + OpNickname[20](UTF-16)
+    void HandleMatchingSuccess(byte[] body)
+    {
+        const int LEN = 8 + 8 + 20 * 2;
+        if (body.Length < LEN)
+        {
+            Debug.LogWarning("[Client] MatchingSuccess body too short.");
+            return;
+        }
+
+        long   opAccountNum = BitConverter.ToInt64(body, 8);
+        string opNickname   = ReadFixedUtf16(body, 16, 20);
+        Debug.Log($"[Client] RES_MATCHING_SUCCESS received. Opponent={opNickname}({opAccountNum})");
+        OnMatchSuccess?.Invoke(opAccountNum, opNickname);
+    }
+
+    /// <summary>
+    /// 게임 중 키 입력을 서버에 전송한다. body: DWORD InputType (en_INPUT_TYPE) — AccountNum 없음(세션ID로 식별).
+    /// </summary>
+    public void SendGameInput(en_INPUT_TYPE inputType)
+    {
+        if (State != NetState.GameReady || !IsConnected)
+        {
+            Debug.LogWarning("[Client] SendGameInput called but not connected to game server.");
+            return;
+        }
+
+        var body = BitConverter.GetBytes((uint)inputType);
+        SendToServer((ushort)PacketID.TETRIS_ACK_GAME_USERINPUT, body);
+    }
+
+    // S -> C 보드 스냅샷. body: BYTE HoldingBlock(1) + WORD NextBlockBag[5](10) + BYTE MyBoard[200] + BYTE OpponentBoard[200]
+    const int BOARD_CELL_COUNT = 20 * 10; // Board.Width * Board.Height
+    const int NEXT_BAG_COUNT   = 5;
+
+    void HandleBoardUpdate(byte[] body)
+    {
+        const int MIN_LEN = 1 + NEXT_BAG_COUNT * 2 + BOARD_CELL_COUNT * 2;
+        if (body.Length < MIN_LEN)
+        {
+            Debug.LogWarning("[Client] BoardUpdate body too short.");
+            return;
+        }
+
+        var holdingBlock = (TetBlockType)body[0];
+        int offset = 1;
+
+        var nextBag = new TetBlockType[NEXT_BAG_COUNT];
+        for (int i = 0; i < NEXT_BAG_COUNT; i++)
+        {
+            nextBag[i] = (TetBlockType)BitConverter.ToUInt16(body, offset);
+            offset += 2;
+        }
+
+        var myBoard = new byte[BOARD_CELL_COUNT];
+        Buffer.BlockCopy(body, offset, myBoard, 0, BOARD_CELL_COUNT);
+        offset += BOARD_CELL_COUNT;
+
+        var opponentBoard = new byte[BOARD_CELL_COUNT];
+        Buffer.BlockCopy(body, offset, opponentBoard, 0, BOARD_CELL_COUNT);
+
+        OnBoardUpdate?.Invoke(holdingBlock, nextBag, myBoard, opponentBoard);
+    }
+
+    // S -> C 낙하 중인 블록 갱신. body: BlockType(1) + Rotate(1) + X(1, signed char) + Y(1, signed char)
+    void HandleBlockUpdate(byte[] body)
+    {
+        if (body.Length < 4)
+        {
+            Debug.LogWarning("[Client] BlockUpdate body too short.");
+            return;
+        }
+
+        var blockType = (TetBlockType)body[0];
+        byte rotate   = body[1];
+        sbyte x       = unchecked((sbyte)body[2]);
+        sbyte y       = unchecked((sbyte)body[3]);
+
+        OnBlockUpdate?.Invoke(blockType, rotate, x, y);
     }
 
     // ════════════════════════════════════════════════════════════════════
@@ -674,6 +841,24 @@ public class Client : MonoBehaviour
                 break;
             case PacketID.TETRIS_REQ_CHAT_MESSAGE:   // 서버가 같은 태그를 브로드캐스트에도 재사용함
                 HandleChatMessage(body);
+                break;
+            case PacketID.TETRIS_RES_MATCHING:
+                HandleMatchingRes(body);
+                break;
+            case PacketID.TETRIS_RES_MATCHING_SUCCESS:
+                HandleMatchingSuccess(body);
+                break;
+            case PacketID.TETRIS_RES_GAME_READY:
+                HandleGameReadyRes(body);
+                break;
+            case PacketID.TETRIS_SC_ACK_COUNTDOWN:
+                HandleCountdown(body);
+                break;
+            case PacketID.TETRIS_SC_ACK_GAME_BOARDUPDATE:
+                HandleBoardUpdate(body);
+                break;
+            case PacketID.TETRIS_SC_ACK_GAME_BLOCKUPDATE:
+                HandleBlockUpdate(body);
                 break;
             default:
                 Debug.LogWarning("[Client] Unhandled packetID: " + packetID);

@@ -2,16 +2,17 @@ using UnityEngine;
 using UnityEngine.InputSystem;
 
 /// <summary>
-/// Main game loop: input (DAS/ARR), gravity, 7-bag spawning, hold piece, game state.
-/// [SERVER_HOOK] methods are the server integration entry points.
+/// GameScene의 컨트롤러. 블록 생성/라인 클리어/보드 갱신은 전부 서버 패킷이 주도하며,
+/// 이 클래스는 매칭 후 게임 준비(REQ/RES_GAME_READY) → 카운트다운(ACK_COUNTDOWN) 네트워크 훅,
+/// 키 입력을 서버로 전송하는 것, 서버가 보내는 상태를 화면에 반영하는 진입점([SERVER_HOOK] 메서드)을 담당한다.
 ///
-/// Controls:
-///   Left / Right      Move (DAS)
-///   Up / X            Rotate CW
-///   Z / Left Ctrl     Rotate CCW
-///   Down              Soft Drop
-///   Space             Hard Drop
-///   Left/Right Shift  Hold
+/// Controls (모두 서버로 en_INPUT_TYPE만 전송 — 로컬 이동/회전은 하지 않음):
+///   Left / Right      en_INPUT_LEFT / en_INPUT_RIGHT
+///   Down              en_INPUT_SOFTDROP
+///   Space             en_INPUT_HARDDROP
+///   Up / X            en_INPUT_ROTATE_CLOCKWISE
+///   Z                 en_INPUT_ROTATE_COUNTERCLOCKWISE
+///   Left/Right Shift  en_INPUT_HOLD
 /// </summary>
 public class GameManager : MonoBehaviour
 {
@@ -26,25 +27,20 @@ public class GameManager : MonoBehaviour
     [Header("Hold Display")]
     public Transform holdDisplayRoot;   // world-space anchor (left of board)
 
-    [Header("Input Timing (seconds)")]
-    public float dasDelay    = 0.167f;
-    public float arrInterval = 0.033f;
-
-    // ── DAS ──────────────────────────────────────────────────────────────────
-    private float _dasTimer;
-    private float _arrTimer;
-    private int   _dasDir;
-
-    // ── 7-bag ─────────────────────────────────────────────────────────────────
-    private readonly TetrominoType[] _bag = new TetrominoType[7];
-    private int _bagIdx = 7;
-
     // ── Hold ─────────────────────────────────────────────────────────────────
-    private TetrominoType? _heldType  = null;
-    private bool           _canHold   = true;
+    // BOARDUPDATE의 HoldingBlock 필드로 서버가 알려주는 값을 그대로 표시한다(클라이언트는 예측하지 않음).
+    private TetBlockType? _heldType = null;
     private readonly Transform[] _holdCells = new Transform[4];
 
     private bool _gameOver;
+
+    // ── Countdown ────────────────────────────────────────────────────────────
+    private CountdownUI _countdownUI;
+    private bool        _countdownFinished; // 카운트다운이 끝나기 전에는 입력을 보내지 않는다.
+
+    // ── Opponent board ───────────────────────────────────────────────────────
+    // 아직 상대방 보드 렌더링 UI가 없어 데이터만 보관한다. (row-major, row0=서버 상단, 200바이트)
+    private byte[] _lastOpponentBoard;
 
     // ── Unity lifecycle ──────────────────────────────────────────────────────
 
@@ -54,141 +50,64 @@ public class GameManager : MonoBehaviour
         board.blockMaterial = blockMaterial;
         piece.blockSprites  = blockSprites;
         piece.blockMaterial = blockMaterial;
-        SpawnNext();
+
+        _countdownUI = new GameObject("CountdownUI").AddComponent<CountdownUI>();
+
+        // [SERVER_HOOK] 매칭 후 게임 씬 진입 시 REQ_GAME_READY 전송, RES_GAME_READY / ACK_COUNTDOWN 응답 대기
+        if (Client.Instance != null)
+        {
+            Client.Instance.OnGameReadyResponse += OnGameReadyResponse;
+            Client.Instance.OnCountdown         += OnServerCountdown;
+            Client.Instance.OnBoardUpdate       += OnServerBoardUpdate;
+            Client.Instance.OnBlockUpdate       += OnServerBlockUpdate;
+            Client.Instance.RequestGameReady();
+        }
+        else
+        {
+            Debug.LogError("[GameManager] Client.Instance가 null입니다. GameScene에 Client 컴포넌트가 있는지 확인해주세요.");
+        }
+    }
+
+    private void OnDestroy()
+    {
+        if (Client.Instance != null)
+        {
+            Client.Instance.OnGameReadyResponse -= OnGameReadyResponse;
+            Client.Instance.OnCountdown         -= OnServerCountdown;
+            Client.Instance.OnBoardUpdate       -= OnServerBoardUpdate;
+            Client.Instance.OnBlockUpdate       -= OnServerBlockUpdate;
+        }
     }
 
     private void Update()
     {
-        if (_gameOver) return;
+        if (!CanSendInput()) return;
+
         var kb = Keyboard.current;
         if (kb == null) return;
 
-        ProcessInput(kb);
-
-        bool softDrop = kb.downArrowKey.isPressed || kb.sKey.isPressed;
-        piece.Tick(Time.deltaTime, softDrop);
-
-        if (piece.IsLocked) SpawnNext();
-    }
-
-    // ── Input ────────────────────────────────────────────────────────────────
-
-    private void ProcessInput(Keyboard kb)
-    {
-        // Rotate
-        if (kb.upArrowKey.wasPressedThisFrame || kb.xKey.wasPressedThisFrame)
-            piece.RotateCW();
-        if (kb.zKey.wasPressedThisFrame || kb.leftCtrlKey.wasPressedThisFrame)
-            piece.RotateCCW();
-
-        // Hard drop
+        if (kb.leftArrowKey.wasPressedThisFrame)
+            Client.Instance.SendGameInput(en_INPUT_TYPE.en_INPUT_LEFT);
+        if (kb.rightArrowKey.wasPressedThisFrame)
+            Client.Instance.SendGameInput(en_INPUT_TYPE.en_INPUT_RIGHT);
+        if (kb.downArrowKey.wasPressedThisFrame)
+            Client.Instance.SendGameInput(en_INPUT_TYPE.en_INPUT_SOFTDROP);
         if (kb.spaceKey.wasPressedThisFrame)
-            piece.HardDrop();
-
-        // Hold
+            Client.Instance.SendGameInput(en_INPUT_TYPE.en_INPUT_HARDDROP);
+        if (kb.upArrowKey.wasPressedThisFrame || kb.xKey.wasPressedThisFrame)
+            Client.Instance.SendGameInput(en_INPUT_TYPE.en_INPUT_ROTATE_CLOCKWISE);
+        if (kb.zKey.wasPressedThisFrame)
+            Client.Instance.SendGameInput(en_INPUT_TYPE.en_INPUT_ROTATE_COUNTERCLOCKWISE);
         if (kb.leftShiftKey.wasPressedThisFrame || kb.rightShiftKey.wasPressedThisFrame)
-            TryHold();
-
-        // DAS
-        bool leftHeld  = kb.leftArrowKey.isPressed  || kb.aKey.isPressed;
-        bool rightHeld = kb.rightArrowKey.isPressed || kb.dKey.isPressed;
-        bool leftDown  = kb.leftArrowKey.wasPressedThisFrame  || kb.aKey.wasPressedThisFrame;
-        bool rightDown = kb.rightArrowKey.wasPressedThisFrame || kb.dKey.wasPressedThisFrame;
-
-        if (leftDown)  { piece.MoveLeft();  SetDAS(-1); }
-        if (rightDown) { piece.MoveRight(); SetDAS( 1); }
-
-        bool oneHeld = leftHeld != rightHeld;
-        if (oneHeld)
-        {
-            int heldDir = leftHeld ? -1 : 1;
-            if (heldDir == _dasDir)
-            {
-                _dasTimer += Time.deltaTime;
-                if (_dasTimer >= dasDelay)
-                {
-                    _arrTimer += Time.deltaTime;
-                    while (_arrTimer >= arrInterval)
-                    {
-                        _arrTimer -= arrInterval;
-                        if (heldDir < 0) piece.MoveLeft(); else piece.MoveRight();
-                    }
-                }
-            }
-        }
-        else if (!leftHeld && !rightHeld)
-        {
-            _dasDir = 0; _dasTimer = 0f; _arrTimer = 0f;
-        }
+            Client.Instance.SendGameInput(en_INPUT_TYPE.en_INPUT_HOLD);
     }
 
-    private void SetDAS(int dir) { _dasDir = dir; _dasTimer = 0f; _arrTimer = 0f; }
-
-    // ── Hold ─────────────────────────────────────────────────────────────────
-
-    private void TryHold()
-    {
-        if (!_canHold) return;
-        _canHold = false;
-
-        TetrominoType current = piece.Type;
-        piece.Cancel();
-
-        if (_heldType == null)
-        {
-            // 처음 홀드: 현재 블록 저장 후 다음 블록 스폰
-            _heldType = current;
-            SpawnNext(skipHoldReset: true); // hold 쿨다운은 유지
-        }
-        else
-        {
-            // 스왑: 보관된 블록과 현재 블록 교환
-            TetrominoType toSpawn = _heldType.Value;
-            _heldType = current;
-            var spawnPivot = new Vector2Int(4, 18);
-            piece.Initialize(board, toSpawn, spawnPivot);
-        }
-
-        UpdateHoldDisplay();
-    }
-
-    // ── Spawning ─────────────────────────────────────────────────────────────
-
-    private void SpawnNext(bool skipHoldReset = false)
-    {
-        if (!skipHoldReset) _canHold = true;
-
-        if (_bagIdx >= 7) RefillBag();
-        TetrominoType type = _bag[_bagIdx++];
-
-        var spawnPivot = new Vector2Int(4, 18);
-        piece.Initialize(board, type, spawnPivot);
-
-        // Top-out check
-        foreach (Vector2Int c in TetrominoData.Cells[(int)type])
-        {
-            if (!board.IsOccupied(spawnPivot + c)) continue;
-            _gameOver = true;
-            Debug.Log("[GameManager] Game Over");
-            // [SERVER_HOOK] NotifyServerGameOver();
-            return;
-        }
-
-        // 홀드 디스플레이 쿨다운 해제 반영
-        if (!skipHoldReset) UpdateHoldDisplay();
-    }
-
-    private void RefillBag()
-    {
-        for (int i = 0; i < 7; i++) _bag[i] = (TetrominoType)i;
-        for (int i = 6; i > 0; i--)
-        {
-            int j = Random.Range(0, i + 1);
-            TetrominoType tmp = _bag[i]; _bag[i] = _bag[j]; _bag[j] = tmp;
-        }
-        _bagIdx = 0;
-        // [SERVER_HOOK] Replace with server-provided next piece
-    }
+    /// <summary>카운트다운이 끝났고, 서버가 보내준 낙하 블록(DropBlock)이 있을 때만 입력을 보낸다.</summary>
+    private bool CanSendInput()
+        => _countdownFinished
+        && Client.Instance != null
+        && piece != null
+        && piece.BlockType != TetBlockType.NoneBlock;
 
     // ── Hold Display ─────────────────────────────────────────────────────────
 
@@ -206,33 +125,36 @@ public class GameManager : MonoBehaviour
 
         if (_heldType == null || holdDisplayRoot == null) return;
 
-        Vector2Int[] cells = TetrominoData.Cells[(int)_heldType.Value];
-        Sprite sprite      = blockSprites[(int)_heldType.Value];
+        TetBlockType type = _heldType.Value;
+
+        // 스폰 회전 상태(rotate=0) 기준으로 채워진 칸 좌표 수집 (row는 서버 기준 아래로 증가)
+        var cells = new System.Collections.Generic.List<Vector2Int>(4);
+        for (int row = 0; row < ShapeTable.ShapeSize; row++)
+            for (int col = 0; col < ShapeTable.ShapeSize; col++)
+                if (ShapeTable.Table[(int)type, 0, row, col] != 0)
+                    cells.Add(new Vector2Int(col, row));
+
+        if (cells.Count == 0) return;
 
         // 피스를 홀드 디스플레이 중앙에 맞추기 위한 오프셋 계산
         float avgX = 0f, avgY = 0f;
-        for (int i = 0; i < cells.Length; i++) { avgX += cells[i].x; avgY += cells[i].y; }
-        avgX /= cells.Length; avgY /= cells.Length;
+        for (int i = 0; i < cells.Count; i++) { avgX += cells[i].x; avgY += cells[i].y; }
+        avgX /= cells.Count; avgY /= cells.Count;
 
         Vector3 center = holdDisplayRoot.position;
+        Sprite  sprite = blockSprites[(int)type - 1]; // IBlock(1)..LBlock(7) → 배열 인덱스 0..6
 
-        for (int i = 0; i < 4; i++)
+        for (int i = 0; i < cells.Count && i < _holdCells.Length; i++)
         {
             var go = new GameObject("HoldCell_" + i);
             go.transform.SetParent(holdDisplayRoot, false);
-            go.transform.position = center + new Vector3(cells[i].x - avgX, cells[i].y - avgY, 0f);
+            // row는 서버 기준 아래로 증가하므로, 화면에 똑바로 보이도록 y축을 뒤집어 배치
+            go.transform.position = center + new Vector3(cells[i].x - avgX, -(cells[i].y - avgY), 0f);
 
             var sr = go.AddComponent<SpriteRenderer>();
             sr.sprite         = sprite;
             sr.sharedMaterial = blockMaterial;
             sr.sortingOrder   = 2;
-
-            // 홀드 쿨다운 중 → 회색으로 표시
-            if (!_canHold)
-            {
-                Color c = new Color(0.45f, 0.45f, 0.45f, 1f);
-                sr.color = c;
-            }
 
             _holdCells[i] = go.transform;
         }
@@ -240,6 +162,46 @@ public class GameManager : MonoBehaviour
 
     // ── Server hooks ─────────────────────────────────────────────────────────
 
-    public void OnServerBoardUpdate(int[,] boardState) => board.ApplyBoardState(boardState);
+    /// <summary>Client.OnBoardUpdate 콜백. 내 보드/홀드 표시를 갱신하고, 상대 보드/다음 블록은 보관만 한다.</summary>
+    private void OnServerBoardUpdate(TetBlockType holdingBlock, TetBlockType[] nextBag, byte[] myBoard, byte[] opponentBoard)
+    {
+        board.ApplyServerBoard(myBoard);
+        piece.RefreshGhost(); // 보드가 바뀌었으니 착지 예측도 다시 계산 (BlockUpdate로도 갱신되지만 이중 안전장치)
+
+        _heldType = holdingBlock == TetBlockType.NoneBlock ? (TetBlockType?)null : holdingBlock;
+        UpdateHoldDisplay();
+
+        _lastOpponentBoard = opponentBoard; // [SERVER_HOOK] 상대방 보드 UI가 생기면 여기서 그리면 됨
+        Debug.Log($"[GameManager] BOARDUPDATE 수신. Hold={holdingBlock} NextBag=[{string.Join(",", nextBag)}]");
+    }
+
+    /// <summary>Client.OnBlockUpdate 콜백. 현재 낙하 중인 블록 위치/모양을 갱신한다.</summary>
+    private void OnServerBlockUpdate(TetBlockType blockType, byte rotate, sbyte x, sbyte y)
+        => piece.ApplyServerState(board, blockType, rotate, x, y);
+
     public void OnServerGameOver() { _gameOver = true; }
+
+    /// <summary>Client.OnGameReadyResponse 콜백. RES_GAME_READY 도착 확인용.</summary>
+    private void OnGameReadyResponse(bool success)
+    {
+        if (success)
+            Debug.Log("[GameManager] RES_GAME_READY 수신: 게임 시작 준비 완료.");
+        else
+            Debug.LogWarning("[GameManager] RES_GAME_READY 수신: 서버가 게임 준비 요청을 거부했습니다.");
+    }
+
+    /// <summary>
+    /// Client.OnCountdown 콜백. ACK_COUNTDOWN(seconds) 수신 시 카운트다운 연출을 재생한다.
+    /// 연출이 끝나면 서버가 보내는 보드/블록 갱신 패킷을 기다리는 상태가 된다.
+    /// </summary>
+    private void OnServerCountdown(int seconds)
+    {
+        Debug.Log($"[GameManager] ACK_COUNTDOWN 수신: {seconds}초 카운트다운 시작.");
+        _countdownFinished = false;
+        _countdownUI.PlayCountdown(seconds, () =>
+        {
+            _countdownFinished = true;
+            Debug.Log("[GameManager] 카운트다운 종료. 입력 전송 가능 상태로 전환.");
+        });
+    }
 }

@@ -1,6 +1,7 @@
 #include "Includes.h"
 #include "Util.h"
 #include "Protocol.h"
+#include "GameHeader.h"
 #include "NetServer.h"
 #include "UserSession.h"
 #include "MatchingManager.h"

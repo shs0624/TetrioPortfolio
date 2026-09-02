@@ -52,8 +52,8 @@ struct st_GameInfo
 	// 현재 낙하중인 블록 정보
 	enTetBlock _DropBlock;
 	BYTE _DropRotate;
-	BYTE _DropX;
-	BYTE _DropY;
+	signed char _DropX;
+	signed char _DropY;
 
 	DWORD _dwLastDropTime;
 };

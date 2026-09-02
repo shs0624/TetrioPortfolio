@@ -28,6 +28,17 @@ public enum PacketID : ushort
     TETRIS_REQ_GAME_READY             = 15,
     TETRIS_RES_GAME_READY             = 16,
     TETRIS_SC_ACK_COUNTDOWN           = 17,
-    TETRIS_REQ_HEARTBEAT              = 18,  // C -> S : 이 type을 word로 넣어야함
-    TETRISLOGIN_REQ_HEARTBEAT         = 19,  // C -> S : 로그인 서버 콜드 타임아웃 방지용 하트비트. 이 type을 word로 넣어야함
+
+    // S -> C : NextBlockBag[5](WORD, enTetBlock) + MyBoard[20][10](BYTE) + OpponentBoard[20][10](BYTE)
+    TETRIS_SC_ACK_GAME_BOARDUPDATE     = 18,
+    // S -> C : BlockType(1, enTetBlock) + Rotate(1) + X(1, signed char) + Y(1, signed char)
+    TETRIS_SC_ACK_GAME_BLOCKUPDATE     = 19,
+    // C -> S : InputType(4, en_INPUT_TYPE) — AccountNum 없음(서버가 세션ID로 유저 식별)
+    TETRIS_ACK_GAME_USERINPUT          = 20,
+
+    TETRIS_REQ_HEARTBEAT              = 21,  // C -> S : 이 type을 word로 넣어야함 (서버 en_PACKET_CS_CHAT_REQ_HEARTBEAT)
+
+    // ⚠️ 서버 Protocol.h에 대응 항목이 없음 (기존부터 있던 불일치, 이번 작업 범위 밖).
+    // 값 충돌만 피하도록 뒤로 밀어둠 — 로그인 하트비트 기능은 별도로 확인 필요.
+    TETRISLOGIN_REQ_HEARTBEAT         = 22,
 }

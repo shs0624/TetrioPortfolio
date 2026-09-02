@@ -11,13 +11,13 @@ void TetrisServer::MoveLeft(st_GAMESESSION* pGameSession, int sessionIndex, RefC
 	st_GameInfo* pGameInfo = &(pGameSession->_GameInfoArr[sessionIndex]);
 
 	int newX = pGameInfo->_DropX - 1;
-	if (newX < 0)
-	{
-		if (!cPacket.DecRefCount())
-			_pLog._dwPacketPoolUse--;
+	//if (newX < 0)
+	//{
+	//	if (!cPacket.DecRefCount())
+	//		_pLog._dwPacketPoolUse--;
 
-		return;
-	}
+	//	return;
+	//}
 
 	// 충돌하면 취소
 	if (!CollisionCheck(pGameInfo, pGameInfo->_DropBlock, pGameInfo->_DropRotate, newX, pGameInfo->_DropY))
@@ -32,6 +32,15 @@ void TetrisServer::MoveLeft(st_GAMESESSION* pGameSession, int sessionIndex, RefC
 
 	(*cPacket)->Clear(sizeof(st_NetHeader));
 	mpACKBlockUpdate(cPacket, pGameInfo->_DropBlock, pGameInfo->_DropRotate, pGameInfo->_DropX, pGameInfo->_DropY);
+
+	if (!SendPacket_UniCast(pGameSession->_SessionIDArr[sessionIndex], cPacket))
+	{
+		// @@ TODO : 연결 끊김 처리
+		DebugBreak();
+		return;
+	}
+
+	// @@TODO : 로그찍기
 }
 
 void TetrisServer::MoveRight(st_GAMESESSION* pGameSession, int sessionIndex, RefCountPointer& cPacket)
@@ -39,13 +48,13 @@ void TetrisServer::MoveRight(st_GAMESESSION* pGameSession, int sessionIndex, Ref
 	st_GameInfo* pGameInfo = &(pGameSession->_GameInfoArr[sessionIndex]);
 
 	int newX = pGameInfo->_DropX + 1;
-	if (newX >= _iMaxX)
-	{
-		if (!cPacket.DecRefCount())
-			_pLog._dwPacketPoolUse--;
+	//if (newX >= _iMaxX)
+	//{
+	//	if (!cPacket.DecRefCount())
+	//		_pLog._dwPacketPoolUse--;
 
-		return;
-	}
+	//	return;
+	//}
 
 	// 충돌하면 취소
 	if (!CollisionCheck(pGameInfo, pGameInfo->_DropBlock, pGameInfo->_DropRotate, newX, pGameInfo->_DropY))
@@ -60,6 +69,15 @@ void TetrisServer::MoveRight(st_GAMESESSION* pGameSession, int sessionIndex, Ref
 
 	(*cPacket)->Clear(sizeof(st_NetHeader));
 	mpACKBlockUpdate(cPacket, pGameInfo->_DropBlock, pGameInfo->_DropRotate, pGameInfo->_DropX, pGameInfo->_DropY);
+
+	if (!SendPacket_UniCast(pGameSession->_SessionIDArr[sessionIndex], cPacket))
+	{
+		// @@ TODO : 연결 끊김 처리
+		DebugBreak();
+		return;
+	}
+
+	// @@TODO : 로그찍기
 }
 
 void TetrisServer::SoftDrop(st_GAMESESSION* pGameSession, int sessionIndex, RefCountPointer& cPacket)
@@ -85,6 +103,15 @@ void TetrisServer::SoftDrop(st_GAMESESSION* pGameSession, int sessionIndex, RefC
 
 	(*cPacket)->Clear(sizeof(st_NetHeader));
 	mpACKBlockUpdate(cPacket, pGameInfo->_DropBlock, pGameInfo->_DropRotate, pGameInfo->_DropX, pGameInfo->_DropY);
+
+	if (!SendPacket_UniCast(pGameSession->_SessionIDArr[sessionIndex], cPacket))
+	{
+		// @@ TODO : 연결 끊김 처리
+		DebugBreak();
+		return;
+	}
+
+	// @@TODO : 로그찍기
 }
 
 // 하드 드랍할 수 있는 가장 낮은 Y값 반환
@@ -114,7 +141,10 @@ int TetrisServer::GetHardDropY(st_GameInfo* pGameInfo)
 		for (int i = ny + 1; i < _iMaxY; i++)
 		{
 			if (pGameInfo->_GameBoard[i][nx] != 0)
+			{
 				landY = i - 1;
+				break;
+			}
 		}
 
 		landY = landY - blockY;
@@ -183,6 +213,16 @@ void TetrisServer::Rotate(st_GAMESESSION* pGameSession, int sessionIndex, bool c
 
 		(*cPacket)->Clear(sizeof(st_NetHeader));
 		mpACKBlockUpdate(cPacket, pGameInfo->_DropBlock, pGameInfo->_DropRotate, pGameInfo->_DropX, pGameInfo->_DropY);
+
+		if (!SendPacket_UniCast(pGameSession->_SessionIDArr[sessionIndex], cPacket))
+		{
+			// @@ TODO : 연결 끊김 처리
+			DebugBreak();
+			return;
+		}
+
+		// @@TODO : 로그찍기
+
 		return;
 	}
 
@@ -205,6 +245,9 @@ void TetrisServer::Hold(st_GAMESESSION* pGameSession, int sessionIndex, RefCount
 		pGameInfo->_DropX = (_iMaxX / 2) - (_iShapeXSize / 2);
 		pGameInfo->_DropY = 0;
 
+		// 보드 갱신 패킷에 담을 NextBlock큐 정보 
+		enTetBlock nextBlockBag[5];
+		GetNextBlockArr(pGameInfo, nextBlockBag);
 
 		// 블록 업데이트 패킷 전송
 		(*cPacket)->Clear(sizeof(st_NetHeader));
@@ -218,6 +261,20 @@ void TetrisServer::Hold(st_GAMESESSION* pGameSession, int sessionIndex, RefCount
 		}
 
 		// @@TODO : 로그찍기
+
+		// 현재 보드 상태를 전송 (생성예정 큐 보내기 위함)
+		RefCountPointer boardUpdatePacket = RefCountPointer::MakeSharedPtr();
+		(*boardUpdatePacket)->Clear(sizeof(st_NetHeader));
+		mpACKBoardUpdate(boardUpdatePacket, pGameInfo->_HoldingBlock, nextBlockBag, (BYTE*)(pGameSession->_GameInfoArr[sessionIndex]._GameBoard),
+			(BYTE*)(pGameSession->_GameInfoArr[1 - sessionIndex]._GameBoard));
+		MakePacketHeader(boardUpdatePacket);
+
+		if (!SendPacket_UniCast(pGameSession->_SessionIDArr[sessionIndex], boardUpdatePacket, false))
+		{
+			// @@ TODO : 연결 끊김 처리
+			DebugBreak();
+			return;
+		}
 	}
 	else
 	{
@@ -245,7 +302,7 @@ void TetrisServer::Hold(st_GAMESESSION* pGameSession, int sessionIndex, RefCount
 		// 현재 보드 상태를 전송 (생성예정 큐 보내기 위함)
 		RefCountPointer boardUpdatePacket = RefCountPointer::MakeSharedPtr();
 		(*boardUpdatePacket)->Clear(sizeof(st_NetHeader));
-		mpACKBoardUpdate(boardUpdatePacket, nextBlockBag, (BYTE*)(pGameSession->_GameInfoArr[sessionIndex]._GameBoard),
+		mpACKBoardUpdate(boardUpdatePacket, pGameInfo->_HoldingBlock, nextBlockBag, (BYTE*)(pGameSession->_GameInfoArr[sessionIndex]._GameBoard),
 			(BYTE*)(pGameSession->_GameInfoArr[1 - sessionIndex]._GameBoard));
 		MakePacketHeader(boardUpdatePacket);
 

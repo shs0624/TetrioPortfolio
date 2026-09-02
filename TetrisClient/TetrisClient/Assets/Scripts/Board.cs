@@ -1,8 +1,8 @@
 using UnityEngine;
 
 /// <summary>
-/// Manages the Tetris grid: locked cell state, rendering, line-clear logic, and grid overlay.
-/// [SERVER_HOOK] Call ApplyBoardState() when a board snapshot arrives from the server.
+/// Manages the Tetris grid: locked cell rendering and grid overlay. Board state is entirely
+/// server-driven — call ApplyBoardState() when a board snapshot arrives from the server.
 /// </summary>
 public class Board : MonoBehaviour
 {
@@ -55,94 +55,63 @@ public class Board : MonoBehaviour
     public Vector3 GridToWorld(int col, int row) =>
         BoardOrigin + new Vector3(col + 0.5f, row + 0.5f, 0f);
 
-    public bool IsOccupied(Vector2Int pos)
-    {
-        if (pos.x < 0 || pos.x >= Width || pos.y < 0) return true;
-        if (pos.y >= Height) return false;
-        return _grid[pos.x, pos.y] != null;
-    }
-
-    // ── Piece locking ────────────────────────────────────────────────────────
-
-    public int LockPiece(TetrominoType type, Vector2Int pivot, Vector2Int[] cells)
-    {
-        foreach (Vector2Int offset in cells)
-        {
-            Vector2Int pos = pivot + offset;
-            if (pos.x < 0 || pos.x >= Width || pos.y < 0 || pos.y >= Height) continue;
-            _grid[pos.x, pos.y] = CreateCell(type, pos);
-        }
-        return ClearLines();
-    }
-
-    // ── Line clear ───────────────────────────────────────────────────────────
-
-    private int ClearLines()
-    {
-        int count = 0;
-        for (int y = 0; y < Height; y++)
-        {
-            if (!IsRowFull(y)) continue;
-            ClearRow(y);
-            DropRowsAbove(y);
-            y--; count++;
-        }
-        return count;
-    }
-
-    private bool IsRowFull(int y)
-    {
-        for (int x = 0; x < Width; x++)
-            if (_grid[x, y] == null) return false;
-        return true;
-    }
-
-    private void ClearRow(int y)
-    {
-        for (int x = 0; x < Width; x++)
-        {
-            if (_grid[x, y] != null) Destroy(_grid[x, y].gameObject);
-            _grid[x, y] = null;
-        }
-    }
-
-    private void DropRowsAbove(int fromY)
-    {
-        for (int y = fromY + 1; y < Height; y++)
-            for (int x = 0; x < Width; x++)
-            {
-                _grid[x, y - 1] = _grid[x, y];
-                _grid[x, y]     = null;
-                if (_grid[x, y - 1] != null)
-                    _grid[x, y - 1].position = GridToWorld(x, y - 1);
-            }
-    }
-
     // ── Server sync ──────────────────────────────────────────────────────────
 
-    /// <summary>[SERVER_HOOK] boardState[x,y] = piece type index, -1 = empty.</summary>
-    public void ApplyBoardState(int[,] boardState)
+    /// <summary>
+    /// 서버 BoardUpdate의 보드 바이트(row-major, row*Width+col, row0=서버 상단)를 그대로 반영한다.
+    /// 서버는 row 증가 = 아래쪽, 클라이언트 그리드는 row 증가 = 위쪽이라 세로로 뒤집어 배치한다.
+    /// </summary>
+    public void ApplyServerBoard(byte[] boardBytes)
     {
-        for (int x = 0; x < Width; x++)
-            for (int y = 0; y < Height; y++)
+        for (int row = 0; row < Height; row++)
+            for (int col = 0; col < Width; col++)
             {
-                if (_grid[x, y] != null) Destroy(_grid[x, y].gameObject);
-                _grid[x, y] = boardState[x, y] >= 0
-                    ? CreateCell((TetrominoType)boardState[x, y], new Vector2Int(x, y))
+                var type = (TetBlockType)boardBytes[row * Width + col];
+                int gx = col;
+                int gy = Height - 1 - row;
+
+                if (_grid[gx, gy] != null) Destroy(_grid[gx, gy].gameObject);
+                _grid[gx, gy] = type != TetBlockType.NoneBlock
+                    ? CreateCell(type, new Vector2Int(gx, gy))
                     : null;
             }
     }
 
+    /// <summary>
+    /// 서버 row 기준(0=상단, Height=바닥 아래) 좌표로 점유 여부를 확인한다. 고스트 피스 착지 계산에 사용.
+    /// 벽 밖/바닥 아래는 점유된 것으로, 보드 위쪽은 비어있는 것으로 취급한다(서버 CollisionCheck와 동일한 규칙).
+    /// </summary>
+    public bool IsCellOccupied(int col, int serverRow)
+    {
+        if (col < 0 || col >= Width) return true;
+        if (serverRow >= Height) return true;
+        if (serverRow < 0) return false;
+
+        int clientRow = Height - 1 - serverRow;
+        return _grid[col, clientRow] != null;
+    }
+
     // ── Internal ─────────────────────────────────────────────────────────────
 
-    private Transform CreateCell(TetrominoType type, Vector2Int pos)
+    private Transform CreateCell(TetBlockType type, Vector2Int pos)
     {
         var go = new GameObject(string.Format("cell_{0}_{1}", pos.x, pos.y));
         go.transform.SetParent(cellContainer, false);
         go.transform.position = GridToWorld(pos);
         var sr = go.AddComponent<SpriteRenderer>();
-        sr.sprite         = blockSprites[(int)type];
         sr.sharedMaterial = blockMaterial;
+
+        if (type == TetBlockType.GarbageBlock)
+        {
+            // 가비지 전용 스프라이트가 없어 임시로 기존 스프라이트를 회색 틴트로 대체한다.
+            sr.sprite = blockSprites[0];
+            sr.color  = new Color(0.4f, 0.4f, 0.4f, 1f);
+        }
+        else
+        {
+            sr.sprite = blockSprites[(int)type - 1]; // IBlock(1)..LBlock(7) → 배열 인덱스 0..6
+        }
+
         return go.transform;
     }
 }

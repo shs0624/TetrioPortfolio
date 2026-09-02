@@ -262,6 +262,7 @@ enum en_PACKET_TYPE
 	//	{
 	//		WORD	Type
 	//
+	//		BYTE	HoldingBlock;
 	//		WORD	NextBlockBag[5];
 	//		BYTE	MyBoard[20][10];
 	//		BYTE	OpponentBoard[20][10];
@@ -278,12 +279,12 @@ enum en_PACKET_TYPE
 	//  게임 드랍 블록 업데이트 패킷
 	//
 	//	{
-	//		WORD	Type
+	//		WORD		Type
 	//
-	//		BYTE	BlockType
-	//		BYTE	Rotate
-	//		BYTE	X
-	//		BYTE	Y
+	//		BYTE		BlockType
+	//		BYTE		Rotate
+	//		signed char	X
+	//		signed char	Y
 	//	}
 	//
 	//------------------------------------------------------------
@@ -300,6 +301,18 @@ enum en_PACKET_TYPE
 	//
 	//------------------------------------------------------------
 	en_PACKET_CS_TETRIS_ACK_GAME_USERINPUT,
+
+	//------------------------------------------------------------
+	//  게임 결과 패킷
+	//
+	//	{
+	//		WORD	Type
+	// 
+	//		DWORD	InputType
+	//	}
+	//
+	//------------------------------------------------------------
+	en_PACKET_CS_TETRIS_ACK_GAME_RESULT,
 
 	//------------------------------------------------------------
 	// 하트비트

@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.UI;
+using UnityEngine.SceneManagement;
 using TMPro;
 using System.Collections;
 using System.Collections.Generic;
@@ -26,6 +27,11 @@ public class LobbyUI : MonoBehaviour
     TextMeshProUGUI _matchBtnTxt;
     bool            _isMatching;
     Coroutine       _dotAnim;
+    Coroutine       _matchTimeoutCoroutine;
+    const float     MATCH_TIMEOUT_SEC = 10f; // RES_MATCHING 자체(대기열 진입 여부)를 기다리는 타임아웃
+
+    // ── Confirm dialog (매칭 실패/타임아웃 시 사용) ─────────────────────────
+    ConfirmDialogUI _confirmDialog;
 
     // ── Font (loaded from TMP Resources) ─────────────────────────────────
     TMP_FontAsset   _font;
@@ -45,6 +51,8 @@ public class LobbyUI : MonoBehaviour
 
         CacheRefs();
 
+        _confirmDialog = new GameObject("ConfirmDialog").AddComponent<ConfirmDialogUI>();
+
         _sendBtn?.onClick.AddListener(OnSendChat);
         _matchBtn?.onClick.AddListener(OnMatchBtnClick);
 
@@ -62,6 +70,8 @@ public class LobbyUI : MonoBehaviour
             Client.Instance.OnChatMessage   += HandleChatMessage;
             Client.Instance.OnChatUserEnter += HandleChatUserEnter;
             Client.Instance.OnChatUserExit  += HandleChatUserExit;
+            Client.Instance.OnMatchResponse += OnMatchResponse;
+            Client.Instance.OnMatchSuccess  += HandleMatchSuccess;
         }
         else
         {
@@ -77,6 +87,8 @@ public class LobbyUI : MonoBehaviour
         Client.Instance.OnChatMessage   -= HandleChatMessage;
         Client.Instance.OnChatUserEnter -= HandleChatUserEnter;
         Client.Instance.OnChatUserExit  -= HandleChatUserExit;
+        Client.Instance.OnMatchResponse -= OnMatchResponse;
+        Client.Instance.OnMatchSuccess  -= HandleMatchSuccess;
     }
 
     // ════════════════════════════════════════════════════════════════════
@@ -205,36 +217,76 @@ public class LobbyUI : MonoBehaviour
     public void RequestMatch()
     {
         if (_isMatching) return;
+        if (Client.Instance == null)
+        {
+            Debug.LogError("[LobbyUI] Client.Instance가 null입니다.");
+            return;
+        }
+
         _isMatching = true;
         ApplyMatchState(true);
 
         Debug.Log("[LobbyUI] Match REQ sent.");
-        // [SERVER_HOOK] NetworkManager.Instance.SendMatchRequest();
+        Client.Instance.SendMatchRequest();
+
+        if (_matchTimeoutCoroutine != null) StopCoroutine(_matchTimeoutCoroutine);
+        _matchTimeoutCoroutine = StartCoroutine(MatchTimeoutCoroutine());
+    }
+
+    IEnumerator MatchTimeoutCoroutine()
+    {
+        yield return new WaitForSeconds(MATCH_TIMEOUT_SEC);
+        _matchTimeoutCoroutine = null;
+
+        _isMatching = false;
+        ApplyMatchState(false);
+        HandleMatchFailure("매칭 응답이 시간 내에 도착하지 않았습니다.");
     }
 
     /// <summary>
-    /// [SERVER_HOOK] Call with the server's match RES.
-    ///   success=true  → keep "matching…" state, wait for OnMatchFound().
-    ///   success=false → revert button to normal.
+    /// Client.OnMatchResponse 콜백.
+    ///   success=true  → 매칭 대기열 진입 성공, "matching…" 상태 유지 (상대방 매칭 완료는 별도 통지, 범위 밖).
+    ///   success=false → 실패 처리 후 확인 모달 표시.
     /// </summary>
     public void OnMatchResponse(bool success)
     {
+        if (_matchTimeoutCoroutine != null)
+        {
+            StopCoroutine(_matchTimeoutCoroutine);
+            _matchTimeoutCoroutine = null;
+        }
+
         if (!success)
         {
             _isMatching = false;
             ApplyMatchState(false);
-            AddSystemMessage("Match request rejected by server.");
+            HandleMatchFailure("매칭 요청이 서버에서 거부되었습니다.");
+            return;
         }
-        // success: stay in matching state
+        // success: stay in matching state, wait for OnMatchFound()
     }
 
-    /// <summary>[SERVER_HOOK] Server found an opponent, load game scene.</summary>
-    public void OnMatchFound()
+    /// <summary>Client.OnMatchSuccess 콜백.</summary>
+    void HandleMatchSuccess(long opAccountNum, string opNickname) => OnMatchFound(opNickname);
+
+    /// <summary>서버가 상대방을 확정했을 때(RES_MATCHING_SUCCESS) GameScene으로 전환한다.</summary>
+    public void OnMatchFound(string opNickname)
     {
         _isMatching = false;
         ApplyMatchState(false);
-        AddSystemMessage("Match found! Loading game...");
-        // [SERVER_HOOK] SceneManager.LoadScene("GameScene");
+        AddSystemMessage($"Match found! vs {opNickname}. Loading game...");
+        SceneManager.LoadScene("GameScene");
+    }
+
+    /// <summary>매칭 실패/타임아웃 공통 처리: 확인 모달을 띄우고, 확인 시 연결을 끊고 로그인 화면으로 돌아간다.</summary>
+    void HandleMatchFailure(string message)
+    {
+        AddSystemMessage(message);
+        _confirmDialog.Show(message, () =>
+        {
+            Client.Instance?.Disconnect();
+            SceneManager.LoadScene("LoginScene");
+        });
     }
 
     void ApplyMatchState(bool matching)

@@ -1,5 +1,6 @@
 #include "Includes.h"
 #include "Protocol.h"
+#include "GameHeader.h"
 #include "NetServer.h"
 #include "UserSession.h"
 #include "MatchingManager.h"
@@ -81,25 +82,26 @@ void TetrisServer::mpRESGameReady(RefCountPointer& cPacket, BYTE status)
 	(**cPacket) << status;
 }
 
-void TetrisServer::mpACKBoardUpdate(RefCountPointer& cPacket, enTetBlock* NextBlockBag, BYTE* pMyBoard, BYTE* pOpBoard, BYTE clearCount = 0, BYTE clearY = 0)
+void TetrisServer::mpACKBoardUpdate(RefCountPointer& cPacket, enTetBlock holdingBlock, enTetBlock* NextBlockBag, BYTE* pMyBoard, BYTE* pOpBoard, BYTE clearCount, BYTE clearY)
 {
 	en_PACKET_TYPE packetType = en_PACKET_SC_TETRIS_ACK_GAME_BOARDUPDATE;
 
 	(**cPacket) << (WORD)packetType;
 
+	(**cPacket) << (BYTE)holdingBlock;
 	for(int i = 0; i < 5; i++)
 		(**cPacket) << (WORD)NextBlockBag[i];
 	(*cPacket)->PutData((char*)pMyBoard, sizeof(BYTE) * 200);
 	(*cPacket)->PutData((char*)pOpBoard, sizeof(BYTE) * 200);
 }
 
-void TetrisServer::mpACKBlockUpdate(RefCountPointer& cPacket, BYTE blockType, BYTE rotate, BYTE x, BYTE y)
+void TetrisServer::mpACKBlockUpdate(RefCountPointer& cPacket, BYTE blockType, BYTE rotate, signed char x, signed char y)
 {
 	en_PACKET_TYPE packetType = en_PACKET_SC_TETRIS_ACK_GAME_BLOCKUPDATE;
 
 	(**cPacket) << (WORD)packetType;
 	(**cPacket) << blockType;
 	(**cPacket) << rotate;
-	(**cPacket) << x;
-	(**cPacket) << y;
+	(**cPacket) << (char)x;
+	(**cPacket) << (char)y;
 }

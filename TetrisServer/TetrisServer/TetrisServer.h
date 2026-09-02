@@ -71,8 +71,8 @@ private:
 	void mpRESGameReady(RefCountPointer& cPacket, BYTE status);
 	void mpACKCountDown(RefCountPointer& cPacket, WORD count);
 
-	void mpACKBoardUpdate(RefCountPointer& cPacket, enTetBlock* NextBlockBag, BYTE* pMyBoard, BYTE* pOpBoard, BYTE clearCount = 0, BYTE clearY = 0);
-	void mpACKBlockUpdate(RefCountPointer& cPacket, BYTE blockType, BYTE rotate, BYTE x, BYTE y);
+	void mpACKBoardUpdate(RefCountPointer& cPacket, enTetBlock holdingBlock, enTetBlock* NextBlockBag, BYTE* pMyBoard, BYTE* pOpBoard, BYTE clearCount = 0, BYTE clearY = 0);
+	void mpACKBlockUpdate(RefCountPointer& cPacket, BYTE blockType, BYTE rotate, signed char x, signed char y);
 
 	// 함수 포인터에 전달하기 위해 static
 	static void OnMatchFound(LPVOID context, st_USER* pUser1, st_USER* pUser2);
@@ -81,6 +81,7 @@ private:
 	void UpdatePlay(st_GAMESESSION* pGameSession);
 	void UpdateBoard(st_GAMESESSION* pGameSession, int sessionIndex);
 	void CreateBlock(st_GAMESESSION* pGameSession, int sessionIndex);
+	void GetNextBlockArr(st_GameInfo* pGameInfo, enTetBlock* pBagArr);
 	enTetBlock GetNextBlockType(st_GameInfo* pGameInfo, enTetBlock* pBagArr);
 	void GenerateBag(enTetBlock* pBag);
 	void Attack(st_GAMESESSION* pGameSession, int sessionIndex, DWORD clearBit);
@@ -112,7 +113,7 @@ private:
 	// 스레드 당 최대 관리 세션 수, 틱 프레임 타임
 	const int _MaxGameSessionPerThread = 500;
 	const DWORD _dwFrameTime = 33;
-	const WORD _wCountDown = 3;
+	const WORD _wCountDown = 4;
 
 	LONG _GameSessionThreadCount = 0;
 	LONG _GameSessionActiveCountArr[10] = { 0 };
