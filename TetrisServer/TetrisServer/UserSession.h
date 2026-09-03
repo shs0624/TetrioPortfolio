@@ -14,6 +14,7 @@ enum en_GAMESESSION_STATE : LONG
 	en_GAMESTATE_WAIT_READY,  // 매칭됨 -> 준비완료 패킷 대기중
 	en_GAMESTATE_COUNTING,    // 준비 완료 -> 카운트다운 패킷 보냄
 	en_GAMESTATE_PLAYING,     // 실제 게임 틱 진행중
+	en_GAMESTATE_END,		  // 게임 종류 후 정리중
 };
 
 // 게임에서 쓰는 블록

@@ -1,4 +1,5 @@
 #include "Includes.h"
+#include "LogManager.h"
 #include "Protocol.h"
 #include "NetServer.h"
 #include "GameHeader.h"
@@ -108,14 +109,12 @@ bool TetrisServer::SetGameSession(st_USER* pUser1, st_USER* pUser2)
 	RefCountPointer matchingSuccessPacket1 = RefCountPointer::MakeSharedPtr();
 	(*matchingSuccessPacket1)->Clear(sizeof(st_NetHeader));
 	mpRESMatchingSuccess(matchingSuccessPacket1, pUser1->AccountNum, pUser2->AccountNum, pUser2->NickName);
-	MakePacketHeader(matchingSuccessPacket1);
 
 	RefCountPointer matchingSuccessPacket2 = RefCountPointer::MakeSharedPtr();
 	(*matchingSuccessPacket2)->Clear(sizeof(st_NetHeader));
 	mpRESMatchingSuccess(matchingSuccessPacket2, pUser2->AccountNum, pUser1->AccountNum, pUser1->NickName);
-	MakePacketHeader(matchingSuccessPacket2);
 
-	if (!SendPacket_UniCast(pUser1->ulSessionID, matchingSuccessPacket1, false))
+	if (!SendPacket_UniCast(pUser1->ulSessionID, matchingSuccessPacket1))
 	{
 		DebugBreak();
 		return false;
@@ -124,7 +123,7 @@ bool TetrisServer::SetGameSession(st_USER* pUser1, st_USER* pUser2)
 	_pLog._dwMatchingSuccessMessageTPS++;
 	_pLog._dwMatchingSuccessMessageTotal++;
 
-	if (!SendPacket_UniCast(pUser2->ulSessionID, matchingSuccessPacket2, false))
+	if (!SendPacket_UniCast(pUser2->ulSessionID, matchingSuccessPacket2))
 	{
 		DebugBreak();
 		return false;
@@ -132,11 +131,38 @@ bool TetrisServer::SetGameSession(st_USER* pUser1, st_USER* pUser2)
 
 	_pLog._dwMatchingSuccessMessageTPS++;
 	_pLog._dwMatchingSuccessMessageTotal++;
-
-	LeaveChat(pUser1->ulSessionID);
-	LeaveChat(pUser2->ulSessionID);
 
 	return true;
+}
+
+void TetrisServer::EndGameSession(st_GAMESESSION* pGameSession, int winnerIdx, int loserIdx)
+{
+	if (winnerIdx != -1)
+	{
+		ULONGLONG winnerSessionID = pGameSession->_SessionIDArr[winnerIdx];
+
+		// 승리 패킷
+		RefCountPointer winResultPacket = RefCountPointer::MakeSharedPtr();
+		(*winResultPacket)->Clear(sizeof(st_NetHeader));
+		mpACKGameResult(winResultPacket, true);
+
+		SendPacket_UniCast(winnerSessionID, winResultPacket);
+	}
+	
+	if (loserIdx != -1)
+	{
+		ULONGLONG loserSessionID = pGameSession->_SessionIDArr[loserIdx];
+
+		// 패배 패킷
+		RefCountPointer loseResultPacket = RefCountPointer::MakeSharedPtr();
+		(*loseResultPacket)->Clear(sizeof(st_NetHeader));
+		mpACKGameResult(loseResultPacket, false);
+
+		SendPacket_UniCast(loserSessionID, loseResultPacket);
+	}
+
+	// 세션 사용 중지 표시
+	pGameSession->_State = en_GAMESTATE_UNUSED;
 }
 
 void TetrisServer::GameUpdate(st_GAMESESSION* pGameSession)
@@ -157,6 +183,7 @@ void TetrisServer::UpdatePlay(st_GAMESESSION* pGameSession)
 	// 드랍 시간을 체크하고, 시간이 지났으면 드랍중인 블록 한 칸 내리기
 	DWORD nowTime = timeGetTime();
 
+	AcquireSRWLockExclusive(&pGameSession->_GameSessionLock);
 	for (int i = 0; i < 2; i++)
 	{
 		st_GameInfo* pGameInfo = &(pGameSession->_GameInfoArr[i]);
@@ -179,12 +206,11 @@ void TetrisServer::UpdatePlay(st_GAMESESSION* pGameSession)
 				RefCountPointer blockUpdatePacket = RefCountPointer::MakeSharedPtr();
 				(*blockUpdatePacket)->Clear(sizeof(st_NetHeader));
 				mpACKBlockUpdate(blockUpdatePacket, pGameInfo->_DropBlock, pGameInfo->_DropRotate, pGameInfo->_DropX, pGameInfo->_DropY);
-				MakePacketHeader(blockUpdatePacket);
 
-				if (!SendPacket_UniCast(pGameSession->_SessionIDArr[i], blockUpdatePacket, false))
+				if (!SendPacket_UniCast(pGameSession->_SessionIDArr[i], blockUpdatePacket))
 				{
-					// @@ TODO : 연결 끊김 처리
-					DebugBreak();
+					EndGameSession(pGameSession, 1 - i, -1);
+					ReleaseSRWLockExclusive(&pGameSession->_GameSessionLock);
 					return;
 				}
 
@@ -194,6 +220,7 @@ void TetrisServer::UpdatePlay(st_GAMESESSION* pGameSession)
 			pGameInfo->_dwLastDropTime = nowTime;
 		}
 	}
+	ReleaseSRWLockExclusive(&pGameSession->_GameSessionLock);
 }
 
 // 예정 블록 5개를 Bag 배열에 복사해서 넣어주기
@@ -403,8 +430,7 @@ void TetrisServer::Attack(st_GAMESESSION* pGameSession, int sessionIndex, DWORD 
 
 		if (!SendPacket_UniCast(pGameSession->_SessionIDArr[1 - sessionIndex], damagePacket))
 		{
-			// @@ TODO : 연결 끊김 처리
-			DebugBreak();
+			EndGameSession(pGameSession, sessionIndex, -1);
 			return;
 		}
 	}
@@ -422,7 +448,8 @@ void TetrisServer::Damage(st_GAMESESSION* pGameSession, int sessionIndex)
 	{
 		if (garbageLine >= _iMaxY)
 		{
-			// @@TODO:게임 오버 처리
+			// 게임 오버
+			EndGameSession(pGameSession, 1 - sessionIndex, sessionIndex);
 			return;
 		}
 
@@ -450,8 +477,7 @@ void TetrisServer::Damage(st_GAMESESSION* pGameSession, int sessionIndex)
 
 		if (!SendPacket_UniCast(pGameSession->_SessionIDArr[sessionIndex], damagePacket))
 		{
-			// @@ TODO : 연결 끊김 처리
-			DebugBreak();
+			EndGameSession(pGameSession, 1 - sessionIndex, -1);
 			return;
 		}
 	}
@@ -498,12 +524,10 @@ void TetrisServer::UpdateBoard(st_GAMESESSION* pGameSession, int sessionIndex)
 	(*boardUpdatePacket)->Clear(sizeof(st_NetHeader));
 	mpACKBoardUpdate(boardUpdatePacket, pGameInfo->_HoldingBlock, nextBlockBag, (BYTE*)(pGameSession->_GameInfoArr[sessionIndex]._GameBoard),
 		(BYTE*)(pGameSession->_GameInfoArr[1 - sessionIndex]._GameBoard));
-	MakePacketHeader(boardUpdatePacket);
 
-	if (!SendPacket_UniCast(pGameSession->_SessionIDArr[sessionIndex], boardUpdatePacket, false))
+	if (!SendPacket_UniCast(pGameSession->_SessionIDArr[sessionIndex], boardUpdatePacket))
 	{
-		// @@ TODO : 연결 끊김 처리
-		DebugBreak();
+		EndGameSession(pGameSession, 1 - sessionIndex, -1);
 		return;
 	}
 }
@@ -519,8 +543,8 @@ void TetrisServer::CreateBlock(st_GAMESESSION* pGameSession, int sessionIndex)
 
 	if (!CollisionCheck(pGameInfo, nextBlock, 0, pGameInfo->_DropX, pGameInfo->_DropY))
 	{
-		// @@TODO : 게임오버 -> 패배
-		DebugBreak();
+		// 게임 오버
+		EndGameSession(pGameSession, 1 - sessionIndex, sessionIndex);
 		return;
 	}
 
@@ -528,12 +552,10 @@ void TetrisServer::CreateBlock(st_GAMESESSION* pGameSession, int sessionIndex)
 	RefCountPointer blockUpdatePacket = RefCountPointer::MakeSharedPtr();
 	(*blockUpdatePacket)->Clear(sizeof(st_NetHeader));
 	mpACKBlockUpdate(blockUpdatePacket, nextBlock, 0, pGameInfo->_DropX, pGameInfo->_DropY);
-	MakePacketHeader(blockUpdatePacket);
 
-	if (!SendPacket_UniCast(pGameSession->_SessionIDArr[sessionIndex], blockUpdatePacket, false))
+	if (!SendPacket_UniCast(pGameSession->_SessionIDArr[sessionIndex], blockUpdatePacket))
 	{
-		// @@ TODO : 연결 끊김 처리
-		DebugBreak();
+		EndGameSession(pGameSession, 1 - sessionIndex, -1);
 		return;
 	}
 
@@ -564,14 +586,14 @@ void TetrisServer::CheckCountDown(st_GAMESESSION* pGameSession)
 
 	if (pGameSession->startTime < nowTime)
 	{
-		// 카운트다운 끝
-		InterlockedExchange((LONG*)&pGameSession->_State, en_GAMESTATE_PLAYING);
-
 		CreateBlock(pGameSession, 0);
 		CreateBlock(pGameSession, 1);
 
 		pGameSession->_GameInfoArr[0]._dwLastDropTime = timeGetTime();
 		pGameSession->_GameInfoArr[1]._dwLastDropTime = timeGetTime();
+
+		// 카운트다운 끝
+		InterlockedExchange((LONG*)&pGameSession->_State, en_GAMESTATE_PLAYING);
 	}
 }
 

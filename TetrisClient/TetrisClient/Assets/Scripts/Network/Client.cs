@@ -101,6 +101,8 @@ public class Client : MonoBehaviour
     public event Action<long, string, string> OnChatMessage;
     /// <summary>게임 시작 준비 완료(RES_GAME_READY) 응답 수신 (success)</summary>
     public event Action<bool> OnGameReadyResponse;
+    /// <summary>로비 복귀 요청 응답(RES_GAME_RETURNCHAT) 수신 (success) — 이 통지 후 로비 씬으로 전환한다.</summary>
+    public event Action<bool> OnReturnChatResponse;
     /// <summary>카운트다운 시작 통지 (seconds) — 이후 진행은 클라이언트가 독자적으로 연출한다.</summary>
     public event Action<int> OnCountdown;
     /// <summary>보드 스냅샷 수신 (holdingBlock, nextBag[5], myBoard[200], opponentBoard[200] — 보드 둘 다 row-major, row0=서버 상단)</summary>
@@ -109,8 +111,12 @@ public class Client : MonoBehaviour
     public event Action<TetBlockType, byte, sbyte, sbyte> OnBlockUpdate;
     /// <summary>대기 중인 가비지(데미지) 줄 수 갱신 (본인 기준)</summary>
     public event Action<int> OnDamageUpdate;
+    /// <summary>게임 결과 통지 (isWin) — true면 승리, false면 패배</summary>
+    public event Action<bool> OnGameResult;
     /// <summary>매칭 요청 응답 (success) — true면 매칭 대기열에 들어간 것뿐, 상대방 매칭 완료는 별도 통지.</summary>
     public event Action<bool> OnMatchResponse;
+    /// <summary>매칭 취소 요청 응답(RES_MATCHING_CANCEL) 수신 (success)</summary>
+    public event Action<bool> OnMatchCancelResponse;
     /// <summary>매칭 성공(상대방 확정) 통지 (opAccountNum, opNickname)</summary>
     public event Action<long, string> OnMatchSuccess;
 
@@ -357,6 +363,13 @@ public class Client : MonoBehaviour
         Debug.Log($"[Client] Login server OK → Game server {gameIP}:{gamePort}");
 
         // 로그인 서버 연결을 끊고, 곧바로 게임 서버로 재접속한다. (_pendingLoginCb는 그대로 유지)
+        // State를 여기서 바로 바꿔두지 않으면, 게임 서버 소켓으로 이미 갈아끼운 뒤에도
+        // State가 한동안 LoginReady로 남아있어서 로그인 서버용 하트비트 코루틴이
+        // (State == LoginReady && IsConnected 조건을 그대로 통과해) 게임 서버 소켓으로
+        // TETRISLOGIN_REQ_HEARTBEAT를 잘못 흘려보낼 수 있다. StopHeartbeat()로 그 코루틴 자체도
+        // 확실히 멈춰서 이중으로 막는다.
+        StopHeartbeat();
+        State = NetState.GameConnecting;
         CloseSocket();
         _pendingSize = 0;
         BeginConnectToGame(gameIP, gamePort);
@@ -561,6 +574,30 @@ public class Client : MonoBehaviour
         OnGameReadyResponse?.Invoke(ok);
     }
 
+    /// <summary>
+    /// 게임 결과 화면에서 로비로 돌아갈 때 1회 호출. 게임 서버에 REQ_GAME_RETURNCHAT을 보내고,
+    /// 결과는 OnReturnChatResponse 이벤트(RES_GAME_RETURNCHAT 수신)로 통지된다.
+    /// </summary>
+    public void SendReturnChatRequest()
+    {
+        if (State != NetState.GameReady || !IsConnected)
+        {
+            Debug.LogWarning("[Client] SendReturnChatRequest called but not connected to game server.");
+            return;
+        }
+
+        SendToServer((ushort)PacketID.TETRIS_REQ_GAME_RETURNCHAT, System.Array.Empty<byte>());
+        Debug.Log("[Client] REQ_GAME_RETURNCHAT sent.");
+    }
+
+    // S -> C 로비 복귀 요청 응답. body: Status(1)
+    void HandleReturnChatRes(byte[] body)
+    {
+        bool ok = body.Length > 0 && body[0] == 1;
+        Debug.Log($"[Client] RES_GAME_RETURNCHAT received. Status={(ok ? "OK" : "FAIL")}");
+        OnReturnChatResponse?.Invoke(ok);
+    }
+
     // S -> C 카운트다운 시작. body: WORD Count(2, 초 단위)
     void HandleCountdown(byte[] body)
     {
@@ -600,6 +637,30 @@ public class Client : MonoBehaviour
         bool ok = body.Length > 0 && body[0] == 1;
         Debug.Log($"[Client] RES_MATCHING received. Status={(ok ? "OK" : "FAIL")}");
         OnMatchResponse?.Invoke(ok);
+    }
+
+    /// <summary>
+    /// 매칭 중일 때 매칭 버튼을 다시 누르면 호출. body: 본문 없음.
+    /// 결과는 OnMatchCancelResponse 이벤트(RES_MATCHING_CANCEL 수신)로 통지된다.
+    /// </summary>
+    public void SendMatchCancelRequest()
+    {
+        if (State != NetState.GameReady || !IsConnected)
+        {
+            Debug.LogWarning("[Client] SendMatchCancelRequest called but not connected to game server.");
+            return;
+        }
+
+        SendToServer((ushort)PacketID.TETRIS_REQ_MATCHING_CANCEL, System.Array.Empty<byte>());
+        Debug.Log("[Client] REQ_MATCHING_CANCEL sent.");
+    }
+
+    // S -> C 매칭 취소 요청 응답. body: Status(1) — 0:실패 1:성공
+    void HandleMatchCancelRes(byte[] body)
+    {
+        bool ok = body.Length > 0 && body[0] == 1;
+        Debug.Log($"[Client] RES_MATCHING_CANCEL received. Status={(ok ? "OK" : "FAIL")}");
+        OnMatchCancelResponse?.Invoke(ok);
     }
 
     // S -> C 매칭 성공(상대방 확정). body: AccountNum(8) + OpAccountNum(8) + OpNickname[20](UTF-16)
@@ -694,6 +755,19 @@ public class Client : MonoBehaviour
 
         int count = body[0];
         OnDamageUpdate?.Invoke(count);
+    }
+
+    // S -> C 게임 결과 통지. body: GameResultFlag(1) — 1:승리 0:패배
+    void HandleGameResult(byte[] body)
+    {
+        if (body.Length < 1)
+        {
+            Debug.LogWarning("[Client] GameResult body too short.");
+            return;
+        }
+
+        bool isWin = body[0] == 1;
+        OnGameResult?.Invoke(isWin);
     }
 
     // ════════════════════════════════════════════════════════════════════
@@ -860,6 +934,9 @@ public class Client : MonoBehaviour
             case PacketID.TETRIS_RES_MATCHING:
                 HandleMatchingRes(body);
                 break;
+            case PacketID.TETRIS_RES_MATCHING_CANCEL:
+                HandleMatchCancelRes(body);
+                break;
             case PacketID.TETRIS_RES_MATCHING_SUCCESS:
                 HandleMatchingSuccess(body);
                 break;
@@ -877,6 +954,12 @@ public class Client : MonoBehaviour
                 break;
             case PacketID.TETRIS_ACK_GAME_DAMAGE:
                 HandleDamageUpdate(body);
+                break;
+            case PacketID.TETRIS_ACK_GAME_RESULT:
+                HandleGameResult(body);
+                break;
+            case PacketID.TETRIS_RES_GAME_RETURNCHAT:
+                HandleReturnChatRes(body);
                 break;
             default:
                 Debug.LogWarning("[Client] Unhandled packetID: " + packetID);

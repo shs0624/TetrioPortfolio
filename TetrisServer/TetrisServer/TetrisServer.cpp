@@ -1,4 +1,5 @@
 ﻿#include "Includes.h"
+#include "LogManager.h"
 #include "Protocol.h"
 #include "NetServer.h"
 #include "GameHeader.h"
@@ -78,6 +79,12 @@ void TetrisServer::OnRecv(ULONGLONG sessionID, RefCountPointer& cPacket)
 	case en_PACKET_CS_TETRIS_ACK_GAME_USERINPUT:
 		MessageProc_GameInput(sessionID, cPacket);
 		break;
+	case en_PACKET_CS_TETRIS_REQ_GAME_RETURNCHAT:
+		MessageProc_ReturnChat(sessionID, cPacket);
+		break;
+	case en_PACKET_CS_TETRIS_REQ_MATCHING_CANCEL:
+		MessageProc_MatchingCancelReq(sessionID, cPacket);
+		break;
 	}
 }
 
@@ -95,6 +102,14 @@ void TetrisServer::OnRelease(ULONGLONG sessionID)
 		{
 		case en_SERVER_CHAT:
 			LeaveChat(sessionID);
+			break;
+		case en_SERVER_MATCHING:
+			pMatchManager->Dequeue(pUser);
+			break;
+		case en_SERVER_GAME:
+			// 카운트 다운 전 상태라면 조치가 필요함
+			if (pUser->pGameSession->_State == en_GAMESTATE_WAIT_READY)
+				EndGameSession(pUser->pGameSession, 1 - (pUser->byGameSessionIndex), -1);
 			break;
 		}
 
@@ -132,30 +147,20 @@ void TetrisServer::OnRelease(ULONGLONG sessionID)
 void TetrisServer::OnMatchFound(LPVOID context, st_USER* pUser1, st_USER* pUser2)
 {
 	TetrisServer* pServer = (TetrisServer*)context;
-	AcquireSRWLockExclusive(&pServer->_ChatDataLock);
 
-	auto it = pServer->_ChatUserIndexMap.find(pUser1->ulSessionID);
-	if (it == pServer->_ChatUserIndexMap.end())
-	{
-		DebugBreak();
-		return;
-	}
-
-	auto it2 = pServer->_ChatUserIndexMap.find(pUser2->ulSessionID);
-	if (it2 == pServer->_ChatUserIndexMap.end())
-	{
-		DebugBreak();
-		return;
-	}
-
-	pServer->_ChatUserIndexMap.erase(it);
-	pServer->_ChatUserIndexMap.erase(it2);
-
-	ReleaseSRWLockExclusive(&pServer->_ChatDataLock);
+	pServer->LeaveChat(pUser1->ulSessionID);
+	pServer->LeaveChat(pUser2->ulSessionID);
 
 	// 게임 방 생성 후 매칭 성공 패킷 전송까지
 	if (!pServer->SetGameSession(pUser1, pUser2))
 	{
 		// @@TODO: 방 생성이 실패했는데 -> 연결끊김 / 세션 꽉참
 	}
+}
+
+void TetrisServer::RegisterNetServerLog(LPVOID context)
+{
+	TetrisServer* pServer = (TetrisServer*)context;
+
+	LogController::GetInstance()->RegisterLogStruct(&_pLog);
 }

@@ -1,4 +1,5 @@
 #include "Includes.h"
+#include "LogManager.h"
 #include "Protocol.h"
 #include "GameHeader.h"
 #include "NetServer.h"
@@ -8,7 +9,7 @@
 
 void TetrisServer::mpRESLogin(RefCountPointer& cPacket, BYTE status)
 {
-	en_PACKET_TYPE packetType = en_PACKET_CS_TETRIS_RES_LOGIN;
+	en_PACKET_TYPE packetType = en_PACKET_SC_TETRIS_RES_LOGIN;
 
 	(**cPacket) << (WORD)packetType;
 	(**cPacket) << status;
@@ -29,7 +30,7 @@ void TetrisServer::mpRESChatMessage(RefCountPointer& cPacket, INT64 accountNum, 
 
 void TetrisServer::mpACKChatEnter(RefCountPointer& cPacket, INT64 accountNum, WCHAR* nickname)
 {
-	en_PACKET_TYPE packetType = en_PACKET_CS_TETRIS_ACK_CHAT_ENTER;
+	en_PACKET_TYPE packetType = en_PACKET_SC_TETRIS_ACK_CHAT_ENTER;
 
 	(**cPacket) << (WORD)packetType;
 	(**cPacket) << accountNum;
@@ -39,7 +40,7 @@ void TetrisServer::mpACKChatEnter(RefCountPointer& cPacket, INT64 accountNum, WC
 
 void TetrisServer::mpACKChatExit(RefCountPointer& cPacket, INT64 accountNum, WCHAR* nickname)
 {
-	en_PACKET_TYPE packetType = en_PACKET_CS_TETRIS_ACK_CHAT_EXIT;
+	en_PACKET_TYPE packetType = en_PACKET_SC_TETRIS_ACK_CHAT_EXIT;
 
 	(**cPacket) << (WORD)packetType;
 	(**cPacket) << accountNum;
@@ -57,7 +58,7 @@ void TetrisServer::mpACKCountDown(RefCountPointer& cPacket, WORD count)
 
 void TetrisServer::mpRESMatching(RefCountPointer& cPacket, BYTE status)
 {
-	en_PACKET_TYPE packetType = en_PACKET_CS_TETRIS_RES_MATCHING;
+	en_PACKET_TYPE packetType = en_PACKET_SC_TETRIS_RES_MATCHING;
 
 	(**cPacket) << (WORD)packetType;
 	(**cPacket) << status;
@@ -65,7 +66,7 @@ void TetrisServer::mpRESMatching(RefCountPointer& cPacket, BYTE status)
 
 void TetrisServer::mpRESMatchingSuccess(RefCountPointer& cPacket, INT64 accountNum, INT64 opAccountNum, WCHAR* opNickname)
 {
-	en_PACKET_TYPE packetType = en_PACKET_CS_TETRIS_RES_MATCHING_SUCCESS;
+	en_PACKET_TYPE packetType = en_PACKET_SC_TETRIS_RES_MATCHING_SUCCESS;
 
 	(**cPacket) << (WORD)packetType;
 	(**cPacket) << accountNum;
@@ -74,9 +75,17 @@ void TetrisServer::mpRESMatchingSuccess(RefCountPointer& cPacket, INT64 accountN
 	(*cPacket)->PutData((char*)opNickname, sizeof(WCHAR) * 20);
 }
 
+void TetrisServer::mpRESMatchingCancel(RefCountPointer& cPacket, BYTE status)
+{
+	en_PACKET_TYPE packetType = en_PACKET_SC_TETRIS_RES_MATCHING_CANCEL;
+
+	(**cPacket) << (WORD)packetType;
+	(**cPacket) << status;
+}
+
 void TetrisServer::mpRESGameReady(RefCountPointer& cPacket, BYTE status)
 {
-	en_PACKET_TYPE packetType = en_PACKET_CS_TETRIS_RES_GAME_READY;
+	en_PACKET_TYPE packetType = en_PACKET_SC_TETRIS_RES_GAME_READY;
 
 	(**cPacket) << (WORD)packetType;
 	(**cPacket) << status;
@@ -108,8 +117,24 @@ void TetrisServer::mpACKBlockUpdate(RefCountPointer& cPacket, BYTE blockType, BY
 
 void TetrisServer::mpACKDamage(RefCountPointer& cPacket, BYTE damageCount)
 {
-	en_PACKET_TYPE packetType = en_PACKET_CS_TETRIS_ACK_GAME_DAMAGE;
+	en_PACKET_TYPE packetType = en_PACKET_SC_TETRIS_ACK_GAME_DAMAGE;
 
 	(**cPacket) << (WORD)packetType;
 	(**cPacket) << damageCount;
+}
+
+void TetrisServer::mpACKGameResult(RefCountPointer& cPacket, BYTE gameResultFlag)
+{
+	en_PACKET_TYPE packetType = en_PACKET_SC_TETRIS_ACK_GAME_RESULT;
+
+	(**cPacket) << (WORD)packetType;
+	(**cPacket) << gameResultFlag;
+}
+
+void TetrisServer::mpRESReturnChat(RefCountPointer& cPacket, BYTE status)
+{
+	en_PACKET_TYPE packetType = en_PACKET_SC_TETRIS_RES_GAME_RETURNCHAT;
+
+	(**cPacket) << (WORD)packetType;
+	(**cPacket) << status;
 }

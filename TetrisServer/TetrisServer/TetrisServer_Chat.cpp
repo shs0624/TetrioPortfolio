@@ -1,4 +1,5 @@
 #include "Includes.h"
+#include "LogManager.h"
 #include "Util.h"
 #include "Protocol.h"
 #include "GameHeader.h"
@@ -25,9 +26,8 @@ void TetrisServer::EnterChat(st_USER* userPtr)
 		RefCountPointer roomUserPacket = RefCountPointer::MakeSharedPtr();
 		(*roomUserPacket)->Clear(sizeof(st_NetHeader));
 		mpACKChatEnter(roomUserPacket, _ChatUserVec[i]->AccountNum, _ChatUserVec[i]->NickName);
-		MakePacketHeader(roomUserPacket);
 
-		if (SendPacket_UniCast(userPtr->ulSessionID, roomUserPacket, false))
+		if (SendPacket_UniCast(userPtr->ulSessionID, roomUserPacket))
 		{
 			_pLog._dwChatEnterMessageTotal++;
 			_pLog._dwChatEnterMessageTPS++;

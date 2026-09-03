@@ -26,6 +26,7 @@ public class LobbyUI : MonoBehaviour
     Image           _matchBtnImg;
     TextMeshProUGUI _matchBtnTxt;
     bool            _isMatching;
+    bool            _isCancelling; // REQ_MATCHING_CANCEL 응답 대기 중 중복 클릭 방지
     Coroutine       _dotAnim;
     Coroutine       _matchTimeoutCoroutine;
     const float     MATCH_TIMEOUT_SEC = 10f; // RES_MATCHING 자체(대기열 진입 여부)를 기다리는 타임아웃
@@ -71,6 +72,7 @@ public class LobbyUI : MonoBehaviour
             Client.Instance.OnChatUserEnter += HandleChatUserEnter;
             Client.Instance.OnChatUserExit  += HandleChatUserExit;
             Client.Instance.OnMatchResponse += OnMatchResponse;
+            Client.Instance.OnMatchCancelResponse += OnMatchCancelResponse;
             Client.Instance.OnMatchSuccess  += HandleMatchSuccess;
         }
         else
@@ -88,6 +90,7 @@ public class LobbyUI : MonoBehaviour
         Client.Instance.OnChatUserEnter -= HandleChatUserEnter;
         Client.Instance.OnChatUserExit  -= HandleChatUserExit;
         Client.Instance.OnMatchResponse -= OnMatchResponse;
+        Client.Instance.OnMatchCancelResponse -= OnMatchCancelResponse;
         Client.Instance.OnMatchSuccess  -= HandleMatchSuccess;
     }
 
@@ -210,8 +213,10 @@ public class LobbyUI : MonoBehaviour
 
     void OnMatchBtnClick()
     {
-        if (_isMatching) return;   // button is locked while matching
-        RequestMatch();
+        if (_isMatching)
+            RequestMatchCancel();  // 매칭 중일 때 다시 누르면 취소 요청
+        else
+            RequestMatch();
     }
 
     public void RequestMatch()
@@ -264,6 +269,41 @@ public class LobbyUI : MonoBehaviour
             return;
         }
         // success: stay in matching state, wait for OnMatchFound()
+    }
+
+    /// <summary>매칭 중일 때 매칭 버튼을 다시 누르면 호출. REQ_MATCHING_CANCEL을 보내고, UI 상태는 아직 바꾸지 않는다.</summary>
+    public void RequestMatchCancel()
+    {
+        if (!_isMatching || _isCancelling) return;
+        if (Client.Instance == null)
+        {
+            Debug.LogError("[LobbyUI] Client.Instance가 null입니다.");
+            return;
+        }
+
+        _isCancelling = true;
+
+        Debug.Log("[LobbyUI] Match Cancel REQ sent.");
+        Client.Instance.SendMatchCancelRequest();
+    }
+
+    /// <summary>
+    /// Client.OnMatchCancelResponse 콜백.
+    ///   success=true  → 매칭 취소 확정. 이때만 매칭 중 상태를 원상복귀한다.
+    ///   success=false → 취소 거부. 매칭 중 상태를 그대로 유지한다.
+    /// </summary>
+    void OnMatchCancelResponse(bool success)
+    {
+        _isCancelling = false;
+
+        if (!success)
+        {
+            AddSystemMessage("매칭 취소 요청이 서버에서 거부되었습니다.");
+            return;
+        }
+
+        _isMatching = false;
+        ApplyMatchState(false);
     }
 
     /// <summary>Client.OnMatchSuccess 콜백.</summary>

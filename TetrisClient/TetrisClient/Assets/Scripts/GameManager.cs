@@ -54,6 +54,9 @@ public class GameManager : MonoBehaviour
     // ── Damage meter ─────────────────────────────────────────────────────────
     private DamageMeterUI _damageMeter;
 
+    // ── Game result ───────────────────────────────────────────────────────────
+    private GameResultUI _gameResultUI;
+
     // ── Unity lifecycle ──────────────────────────────────────────────────────
 
     private void Start()
@@ -69,6 +72,10 @@ public class GameManager : MonoBehaviour
         _damageMeter.Init(board, blockSprites, blockMaterial);
         _damageMeter.SetCount(0); // 첫 패킷이 오기 전엔 빈 상태로 시작
 
+        _gameResultUI = Object.FindAnyObjectByType<GameResultUI>(FindObjectsInactive.Include);
+        if (_gameResultUI == null)
+            Debug.LogError("[GameManager] GameResultUI를 씬에서 찾을 수 없습니다. GameScene에 배치되어 있는지 확인해주세요.");
+
         // [SERVER_HOOK] 매칭 후 게임 씬 진입 시 REQ_GAME_READY 전송, RES_GAME_READY / ACK_COUNTDOWN 응답 대기
         if (Client.Instance != null)
         {
@@ -77,6 +84,7 @@ public class GameManager : MonoBehaviour
             Client.Instance.OnBoardUpdate       += OnServerBoardUpdate;
             Client.Instance.OnBlockUpdate       += OnServerBlockUpdate;
             Client.Instance.OnDamageUpdate      += OnServerDamageUpdate;
+            Client.Instance.OnGameResult        += OnServerGameResult;
             Client.Instance.RequestGameReady();
         }
         else
@@ -94,6 +102,7 @@ public class GameManager : MonoBehaviour
             Client.Instance.OnBoardUpdate       -= OnServerBoardUpdate;
             Client.Instance.OnBlockUpdate       -= OnServerBlockUpdate;
             Client.Instance.OnDamageUpdate      -= OnServerDamageUpdate;
+            Client.Instance.OnGameResult        -= OnServerGameResult;
         }
     }
 
@@ -118,9 +127,10 @@ public class GameManager : MonoBehaviour
             Client.Instance.SendGameInput(en_INPUT_TYPE.en_INPUT_HOLD);
     }
 
-    /// <summary>카운트다운이 끝났고, 서버가 보내준 낙하 블록(DropBlock)이 있을 때만 입력을 보낸다.</summary>
+    /// <summary>카운트다운이 끝났고, 서버가 보내준 낙하 블록(DropBlock)이 있고, 게임이 끝나지 않았을 때만 입력을 보낸다.</summary>
     private bool CanSendInput()
         => _countdownFinished
+        && !_gameOver
         && Client.Instance != null
         && piece != null
         && piece.BlockType != TetBlockType.NoneBlock;
@@ -227,6 +237,14 @@ public class GameManager : MonoBehaviour
     private void OnServerDamageUpdate(int count) => _damageMeter.SetCount(count);
 
     public void OnServerGameOver() { _gameOver = true; }
+
+    /// <summary>Client.OnGameResult 콜백. 승패 결과를 마스크+텍스트로 띄우고 입력을 멈춘다.</summary>
+    private void OnServerGameResult(bool isWin)
+    {
+        Debug.Log($"[GameManager] GAME_RESULT 수신. isWin={isWin}");
+        _gameOver = true;
+        _gameResultUI.Show(isWin);
+    }
 
     /// <summary>Client.OnGameReadyResponse 콜백. RES_GAME_READY 도착 확인용.</summary>
     private void OnGameReadyResponse(bool success)

@@ -1,4 +1,5 @@
 #include "Includes.h"
+#include "LogManager.h"
 #include "Util.h"
 #include "Protocol.h"
 #include "GameHeader.h"
@@ -131,6 +132,8 @@ void TetrisServer::MessageProc_Login(ULONGLONG sessionID, RefCountPointer& cPack
 	userPtr->AccountNum = accountNum;
 	userPtr->dwLastRecvTime = timeGetTime();
 	userPtr->bBatched = FALSE;
+	userPtr->pGameSession = NULL;
+	userPtr->enServerState = None;
 	memcpy_s(userPtr->SessionKey, sizeof(userPtr->SessionKey), tempSessionKey, sizeof(tempSessionKey));
 	//wcsncpy_s(userPtr->ID, tempID, sizeof(WCHAR) * 20);
 	wcsncpy_s(userPtr->NickName, Nickname, _TRUNCATE);
@@ -193,6 +196,16 @@ void TetrisServer::MessageProc_ChatMessage(ULONGLONG sessionID, RefCountPointer&
 	}
 
 	st_USER* userPtr = (*it).second;
+	if (userPtr->enServerState != en_SERVER_CHAT && userPtr->enServerState != en_SERVER_MATCHING)
+	{
+		ReleaseSRWLockShared(&_UserMapLock);
+		Disconnect(sessionID);
+
+		if (!cPacket.DecRefCount())
+			_pLog._dwPacketPoolUse--;
+		return;
+	}
+
 	wcsncpy_s(nickname, userPtr->NickName, _TRUNCATE);
 	accountNum = userPtr->AccountNum;
 	ReleaseSRWLockShared(&_UserMapLock);
@@ -224,6 +237,46 @@ void TetrisServer::MessageProc_MatchingReq(ULONGLONG sessionID, RefCountPointer&
 {
 	BYTE status = TRUE;
 
+	AcquireSRWLockShared(&_UserMapLock);
+	auto it = _UserMap.find(sessionID);
+	if (it == _UserMap.end())
+	{
+		ReleaseSRWLockShared(&_UserMapLock);
+		if (!cPacket.DecRefCount())
+			_pLog._dwPacketPoolUse--;
+
+		Disconnect(sessionID);
+		return;
+	}
+
+	st_USER* userPtr = (*it).second;
+	if (userPtr->enServerState != en_SERVER_CHAT)
+	{
+		ReleaseSRWLockShared(&_UserMapLock);
+		Disconnect(sessionID);
+
+		if (!cPacket.DecRefCount())
+			_pLog._dwPacketPoolUse--;
+		return;
+	}
+
+	// 매칭 서버로의 입장
+	InterlockedExchange((LONG*)&(userPtr->enServerState), en_SERVER_MATCHING);
+	ReleaseSRWLockShared(&_UserMapLock);
+
+	pMatchManager->Enqueue(userPtr);
+
+	// 매칭 요청에 대한 응답
+	(*cPacket)->Clear(sizeof(st_NetHeader));
+	mpRESMatching(cPacket, status);
+
+	SendPacket_UniCast(sessionID, cPacket);
+}
+
+void TetrisServer::MessageProc_MatchingCancelReq(ULONGLONG sessionID, RefCountPointer& cPacket)
+{
+	BYTE status = TRUE;
+
 	// 매칭 큐에 넣기
 	AcquireSRWLockShared(&_UserMapLock);
 	auto it = _UserMap.find(sessionID);
@@ -238,16 +291,26 @@ void TetrisServer::MessageProc_MatchingReq(ULONGLONG sessionID, RefCountPointer&
 	}
 
 	st_USER* userPtr = (*it).second;
+	if (userPtr->enServerState != en_SERVER_MATCHING)
+	{
+		ReleaseSRWLockShared(&_UserMapLock);
+		Disconnect(sessionID);
 
-	// 매칭 서버로의 입장
-	InterlockedExchange((LONG*)&(userPtr->enServerState), en_SERVER_MATCHING);
+		if (!cPacket.DecRefCount())
+			_pLog._dwPacketPoolUse--;
+		return;
+	}
+
 	ReleaseSRWLockShared(&_UserMapLock);
 
-	pMatchManager->Enqueue(userPtr);
+	if (!pMatchManager->Dequeue(userPtr))
+		status = false;
+	else
+		InterlockedExchange((LONG*)&(userPtr->enServerState), en_SERVER_CHAT);
 
-	// 매칭 요청에 대한 응답
+	// 매칭 취소 요청에 대한 응답
 	(*cPacket)->Clear(sizeof(st_NetHeader));
-	mpRESMatching(cPacket, status);
+	mpRESMatchingCancel(cPacket, status);
 
 	SendPacket_UniCast(sessionID, cPacket);
 }
@@ -321,6 +384,15 @@ void TetrisServer::MessageProc_GameInput(ULONGLONG sessionID, RefCountPointer& c
 	}
 
 	st_USER* userPtr = (*it).second;
+	if (userPtr->enServerState != en_SERVER_GAME)
+	{
+		ReleaseSRWLockShared(&_UserMapLock);
+		Disconnect(sessionID);
+
+		if (!cPacket.DecRefCount())
+			_pLog._dwPacketPoolUse--;
+		return;
+	}
 	ReleaseSRWLockShared(&_UserMapLock);
 
 	en_INPUT_TYPE inputType;
@@ -350,4 +422,42 @@ void TetrisServer::MessageProc_GameInput(ULONGLONG sessionID, RefCountPointer& c
 		Hold(userPtr->pGameSession, userPtr->byGameSessionIndex, cPacket);
 		break;
 	}
+}
+
+void TetrisServer::MessageProc_ReturnChat(ULONGLONG sessionID, RefCountPointer& cPacket)
+{
+	BYTE status = true;
+
+	AcquireSRWLockShared(&_UserMapLock);
+	auto it = _UserMap.find(sessionID);
+	if (it == _UserMap.end())
+	{
+		ReleaseSRWLockShared(&_UserMapLock);
+		if (!cPacket.DecRefCount())
+			_pLog._dwPacketPoolUse--;
+
+		Disconnect(sessionID);
+		return;
+	}
+
+	st_USER* userPtr = (*it).second;
+	if (userPtr->enServerState != en_SERVER_GAME)
+	{
+		ReleaseSRWLockShared(&_UserMapLock);
+		Disconnect(sessionID);
+
+		if (!cPacket.DecRefCount())
+			_pLog._dwPacketPoolUse--;
+		return;
+	}
+	ReleaseSRWLockShared(&_UserMapLock);
+
+	_pLog._dwGameUserCount--;
+
+	EnterChat(userPtr);
+
+	(*cPacket)->Clear(sizeof(st_NetHeader));
+	mpRESReturnChat(cPacket, status);
+
+	SendPacket_UniCast(sessionID, cPacket);
 }

@@ -24,25 +24,34 @@ public enum PacketID : ushort
     TETRIS_REQ_CHAT_MESSAGE           = 11,
     TETRIS_REQ_MATCHING               = 12,
     TETRIS_RES_MATCHING               = 13,
-    TETRIS_RES_MATCHING_SUCCESS       = 14,
-    TETRIS_REQ_GAME_READY             = 15,
-    TETRIS_RES_GAME_READY             = 16,
-    TETRIS_SC_ACK_COUNTDOWN           = 17,
+    // C -> S : 본문 없음. 매칭 중일 때 매칭 버튼을 다시 누르면 전송.
+    TETRIS_REQ_MATCHING_CANCEL         = 14,
+    // S -> C : Status(1)
+    TETRIS_RES_MATCHING_CANCEL         = 15,
+    TETRIS_RES_MATCHING_SUCCESS       = 16,
+    TETRIS_REQ_GAME_READY             = 17,
+    TETRIS_RES_GAME_READY             = 18,
+    TETRIS_SC_ACK_COUNTDOWN           = 19,
 
     // S -> C : NextBlockBag[5](WORD, enTetBlock) + MyBoard[20][10](BYTE) + OpponentBoard[20][10](BYTE)
-    TETRIS_SC_ACK_GAME_BOARDUPDATE     = 18,
+    TETRIS_SC_ACK_GAME_BOARDUPDATE     = 20,
     // S -> C : BlockType(1, enTetBlock) + Rotate(1) + X(1, signed char) + Y(1, signed char)
-    TETRIS_SC_ACK_GAME_BLOCKUPDATE     = 19,
+    TETRIS_SC_ACK_GAME_BLOCKUPDATE     = 21,
     // S -> C : DamageCount(1, BYTE) — 아직 적용 안 된 대기 가비지 줄 수(받는 사람 자신 기준)
-    TETRIS_ACK_GAME_DAMAGE             = 20,
+    TETRIS_ACK_GAME_DAMAGE             = 22,
     // C -> S : InputType(4, en_INPUT_TYPE) — AccountNum 없음(서버가 세션ID로 유저 식별)
-    TETRIS_ACK_GAME_USERINPUT          = 21,
+    TETRIS_ACK_GAME_USERINPUT          = 23,
     // C -> S : InputType(4) — 서버 Protocol.h 주석이 USERINPUT과 동일하게 되어있음(서버 쪽 오탈자로 보임). 처리 로직은 아직 없음.
-    TETRIS_ACK_GAME_RESULT              = 22,
+    TETRIS_ACK_GAME_RESULT              = 24,
 
-    TETRIS_REQ_HEARTBEAT              = 23,  // C -> S : 이 type을 word로 넣어야함 (서버 en_PACKET_CS_CHAT_REQ_HEARTBEAT)
+    // C -> S : 본문 없음. 게임 결과 화면의 "로비로 돌아가기" 클릭 시 전송 — 서버가 EnterChat()을 재호출해 채팅방에 복귀시킨다.
+    TETRIS_REQ_GAME_RETURNCHAT         = 25,
+    // S -> C : Status(1)
+    TETRIS_RES_GAME_RETURNCHAT         = 26,
+
+    TETRIS_REQ_HEARTBEAT              = 27,  // C -> S : 이 type을 word로 넣어야함 (서버 en_PACKET_CS_CHAT_REQ_HEARTBEAT)
 
     // ⚠️ 서버 Protocol.h에 대응 항목이 없음 (기존부터 있던 불일치, 이번 작업 범위 밖).
     // 값 충돌만 피하도록 뒤로 밀어둠 — 로그인 하트비트 기능은 별도로 확인 필요.
-    TETRISLOGIN_REQ_HEARTBEAT         = 24,
+    TETRISLOGIN_REQ_HEARTBEAT         = 28,
 }

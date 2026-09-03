@@ -23,7 +23,7 @@ public:
 			_hQuitEvent = CreateEvent(NULL, FALSE, FALSE, NULL);
 			
 			pMatchManager = new MatchingManager();
-			pMatchManager->InitMatchingManager(this, &TetrisServer::OnMatchFound);
+			pMatchManager->InitMatchingManager(this, &TetrisServer::OnMatchFound, &TetrisServer::RegisterNetServerLog);
 
 			for (int i = 0; i < 10; i++)
 			{
@@ -48,8 +48,10 @@ public:
 	void MessageProc_Login(ULONGLONG sessionID, RefCountPointer& cPacket);
 	void MessageProc_ChatMessage(ULONGLONG sessionID, RefCountPointer& cPacket);
 	void MessageProc_MatchingReq(ULONGLONG sessionID, RefCountPointer& cPacket);
+	void MessageProc_MatchingCancelReq(ULONGLONG sessionID, RefCountPointer& cPacket);
 	void MessageProc_GameReadyReq(ULONGLONG sessionID, RefCountPointer& cPacket);
 	void MessageProc_GameInput(ULONGLONG sessionID, RefCountPointer& cPacket);
+	void MessageProc_ReturnChat(ULONGLONG sessionID, RefCountPointer& cPacket);
 
 	//virtual bool OnConnectionRequest(ULONG ip, LONG port);
 	virtual bool OnAccept(ULONGLONG sessionID, SOCKADDR_IN clientAddr);
@@ -68,16 +70,22 @@ private:
 
 	void mpRESMatching(RefCountPointer& cPacket, BYTE status);
 	void mpRESMatchingSuccess(RefCountPointer& cPacket, INT64 accountNum, INT64 opAccountNum, WCHAR* opNickname);
+	void mpRESMatchingCancel(RefCountPointer& cPacket, BYTE status);
 	void mpRESGameReady(RefCountPointer& cPacket, BYTE status);
 	void mpACKCountDown(RefCountPointer& cPacket, WORD count);
 
 	void mpACKBoardUpdate(RefCountPointer& cPacket, enTetBlock holdingBlock, enTetBlock* NextBlockBag, BYTE* pMyBoard, BYTE* pOpBoard, BYTE clearCount = 0, BYTE clearY = 0);
 	void mpACKBlockUpdate(RefCountPointer& cPacket, BYTE blockType, BYTE rotate, signed char x, signed char y);
 	void mpACKDamage(RefCountPointer& cPacket, BYTE damageCount);
+	void mpACKGameResult(RefCountPointer& cPacket, BYTE gameResultFlag);
+	void mpRESReturnChat(RefCountPointer& cPacket, BYTE status);
 
 	// 함수 포인터에 전달하기 위해 static
 	static void OnMatchFound(LPVOID context, st_USER* pUser1, st_USER* pUser2);
+	static void RegisterNetServerLog(LPVOID context);
+
 	bool SetGameSession(st_USER* pUser1, st_USER* pUser2);
+	void EndGameSession(st_GAMESESSION* pGameSession, int winnerIdx, int loserIdx);
 	void GameUpdate(st_GAMESESSION* pGameSession);
 	void UpdatePlay(st_GAMESESSION* pGameSession);
 	void UpdateBoard(st_GAMESESSION* pGameSession, int sessionIndex);
