@@ -17,6 +17,14 @@ namespace SHS
 		// 그 외의 세션 상태에서의 메세지는 별도의 단일 스레드에 몰아주자. (방에 들어가지 않은 상태의 Write)
 		// 직렬화가 필요한 작업할 땐 writerThread가 처리하게 해야함.
 
+		static void SetConfig(const std::string& dbUser, const std::string& dbName, const std::string& dbPasswd, const int dbPort)
+		{
+			_sDBUser = dbUser;
+			_sDBName = dbName;
+			_sDBPasswd = dbPasswd;
+			_iDBPort = dbPort;
+		}
+
 		static DBTLSConnector* GetDBConnectorTLS()
 		{
 			thread_local DBTLSConnector client;
@@ -187,7 +195,7 @@ namespace SHS
 				_resultBind[i].length = &_resStrLen[i];
 			}
 
-			connection = mysql_real_connect(sql, "127.0.0.1", "root", "12341234!!", "accountdb", 3306, (char*)NULL, CLIENT_MULTI_STATEMENTS);
+			connection = mysql_real_connect(sql, "127.0.0.1", _sDBUser.c_str(), _sDBPasswd.c_str(), _sDBName.c_str(), _iDBPort, (char*)NULL, CLIENT_MULTI_STATEMENTS);
 			if (connection == NULL)
 			{
 				fprintf(stderr, "Mysql connection error : %s", mysql_error(sql));
@@ -196,6 +204,11 @@ namespace SHS
 
 			return true;
 		}
+
+		static std::string _sDBUser;
+		static std::string _sDBName;
+		static std::string _sDBPasswd;
+		static int _iDBPort;
 
 		MYSQL conn;
 		MYSQL* connection;

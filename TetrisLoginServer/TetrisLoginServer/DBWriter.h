@@ -14,10 +14,15 @@ namespace SHS
 		DBWriter() {};
 		~DBWriter() {};
 
-		void InitDBWriter(TLSMemoryPoolManager< CDBPoolStruct>* JobPool)
+		void InitDBWriter(TLSMemoryPoolManager< CDBPoolStruct>* JobPool, std::string& dbUser, std::string& dbName, std::string& dbPasswd, int dbPort)
 		{
 			InitializeSRWLock(&_QueueLock);
 			_hQEvent = CreateEvent(NULL, FALSE, FALSE, NULL);
+
+			_sDBUser = dbUser;
+			_sDBName = dbName;
+			_sDBPasswd = dbPasswd;
+			_iDBPort = dbPort;
 
 			_DBWriteThread = std::thread(&DBWriter::DBWriteThread, this);
 		}
@@ -25,7 +30,7 @@ namespace SHS
 		bool ConnectMysql()
 		{
 			mysql_init(&_Conn);
-			connection = mysql_real_connect(&_Conn, "127.0.0.1", "root", "12341234!!", "accountdb", 3306, (char*)NULL, CLIENT_MULTI_STATEMENTS);
+			connection = mysql_real_connect(&_Conn, "127.0.0.1", _sDBUser.c_str(), _sDBPasswd.c_str(), _sDBName.c_str(), _iDBPort, (char*)NULL, CLIENT_MULTI_STATEMENTS);
 			if (connection == NULL)
 			{
 				fprintf(stderr, "Mysql connection error : %s", mysql_error(&_Conn));
@@ -129,6 +134,11 @@ namespace SHS
 		// stmt 준비해놓기 -> Query별로
 		std::unordered_map<std::string, MYSQL_STMT*> _stmtCache;
 
+		std::string _sDBUser;
+		std::string _sDBName;
+		std::string _sDBPasswd;
+		int _iDBPort;
+
 		MYSQL _Conn;
 		bool _bConnected;
 
@@ -171,17 +181,21 @@ namespace SHS
 			}
 		}
 
-		void InitDBWriterManager(int threadCount)
+		void InitDBWriterManager(int threadCount, std::string& dbUser, std::string& dbName, std::string& dbPasswd, int dbPort)
 		{
-			_SingleDBWriter.InitDBWriter(&_JobPool);
-			//_pDBWriterArr = (DBWriter*)malloc(sizeof(DBWriter) * threadCount);
+			_sDBUser = dbUser;
+			_sDBName = dbName;
+			_sDBPasswd = dbPasswd;
+			_iDBPort = dbPort;
+
+			_SingleDBWriter.InitDBWriter(&_JobPool, _sDBUser, _sDBName, _sDBPasswd, _iDBPort);
 			_pDBWriterArr = new DBWriter[threadCount];
 
 			_ithreadCount = threadCount;
 			// 연결이 아니라, 스레드를 생성해야함.
 			for (int i = 0; i < threadCount; i++)
 			{
-				_pDBWriterArr[i].InitDBWriter(&_JobPool);
+				_pDBWriterArr[i].InitDBWriter(&_JobPool, _sDBUser, _sDBName, _sDBPasswd, _iDBPort);
 			}
 		}
 		
@@ -189,6 +203,11 @@ namespace SHS
 		int _ithreadCount;
 		DBWriter _SingleDBWriter;
 		DBWriter* _pDBWriterArr;
+
+		std::string _sDBUser;
+		std::string _sDBName;
+		std::string _sDBPasswd;
+		int _iDBPort;
 
 		static TLSMemoryPoolManager<CDBPoolStruct> _JobPool;
 	};

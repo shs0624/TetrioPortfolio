@@ -2,7 +2,7 @@
 #include "NetServer.h"
 #include "TetrisLoginServer.h"
 #include "LogManager.h"
-
+#include "CConfigReader.h"
 procademy::CCrashDump cCrashDump;
 
 int main()
@@ -10,7 +10,7 @@ int main()
 	srand(time(NULL));
 
     TetrisLoginServer* _loginServer = new TetrisLoginServer();
-    _loginServer->InitLoginServer(INADDR_ANY, SERVERPORT, true, 20000);
+    _loginServer->InitLoginServer(true, 20000);
 
 	char ch;
 	while (1)

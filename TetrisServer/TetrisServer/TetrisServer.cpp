@@ -6,11 +6,25 @@
 #include "UserSession.h"
 #include "MatchingManager.h"
 #include "TetrisServer.h"
+#include "CConfigReader.h"
+
+procademy::CCrashDump cCrashDump;
 
 int main()
 {
+	srand(time(NULL));
+
+	CConfigReader config;
+	if (!config.Load("config.txt"))
+	{
+		std::cerr << "config.txt를 열 수 없습니다." << std::endl;
+		return 1;
+	}
+
+	int gameServerPort = config.GetInt("GameServerPort");
+
     TetrisServer* pServer = new TetrisServer();
-    pServer->InitTetrisServer(INADDR_ANY, SERVERPORT, true, 10000);
+    pServer->InitTetrisServer(INADDR_ANY, gameServerPort, true, 10000);
 
 	char ch;
     while (1)

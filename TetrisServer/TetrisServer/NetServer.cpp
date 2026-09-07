@@ -15,21 +15,6 @@ thread_local stServerLog CNetServer::_pLog;
 int CNetServer::FindUsableSessionIndex()
 {
 	ULONGLONG idx = -1;
-	//{
-	//	Profiler("FindUsableSessionIndex_std::Stack");
-	//	_IndexStackMutex.lock();
-	//	if (_emptyIndexStack->empty())
-	//	{
-	//		_IndexStackMutex.unlock();
-	//		return -1;
-	//	}
-
-	//	idx = _emptyIndexStack->top();
-	//	_emptyIndexStack->pop();
-	//	_IndexStackMutex.unlock();
-	//}
-	//return idx;
-
 	{
 		Profiler("FindUsableSessionIndex_LockFreeStack");
 		if (_emptyIndexStack->pop(&idx))

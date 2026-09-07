@@ -4,12 +4,6 @@
 #define dfSECTOR_MAX_Y 50
 #define dfSECTOR_MAX_X 50
 
-#define dfGAMESERVER_IP L"127.0.0.1"
-#define dfCHATSERVER_PUBLICIP L"106.245.38.102"
-#define dfGAMESERVER_PORT 10600
-
-#define dfCHATSERVER_PORT 20204
-
 class TetrisLoginServer : CNetServer
 {
 public:
@@ -18,7 +12,7 @@ public:
 
 	}
 
-	void InitLoginServer(ULONG ip, LONG port, bool bNagleEnabled, int maxConnection);
+	void InitLoginServer(bool bNagleEnabled, int maxConnection);
 
 	void QuitServer() override
 	{
@@ -45,6 +39,9 @@ private:
 	void mpLoginRES(RefCountPointer& cPacket, INT64 accountNum, BYTE status, WCHAR* gameIP, USHORT gamePort, const WCHAR* sessionKey);
 
 	SHS::DBWriterManager* _DBWriterManager;
+
+	std::wstring _wGameServerIP;
+	int _iGameServerPort;
 
 	HANDLE _hQuitEvent;
 	HANDLE _hTimeoutEvent;

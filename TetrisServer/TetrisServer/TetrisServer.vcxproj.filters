@@ -56,6 +56,9 @@
     <ClCompile Include="TetrisServer_Input.cpp">
       <Filter>TetrisServer</Filter>
     </ClCompile>
+    <ClCompile Include="CConfigReader.cpp">
+      <Filter>Lib</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="CSerializationBuffer.h">
@@ -117,6 +120,9 @@
     </ClInclude>
     <ClInclude Include="Util.h">
       <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="CConfigReader.h">
+      <Filter>Lib</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

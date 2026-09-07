@@ -8,6 +8,7 @@
 #include "Protocol.h"
 #include "CFreeList_LockFree.h"
 #include "LogManager.h"
+#include "CConfigReader.h"
 
 TLSMemoryPoolManager<CDBPoolStruct>
 SHS::DBTLSConnector::_JobPool(2000, 5, 20);
@@ -15,19 +16,42 @@ SHS::DBTLSConnector::_JobPool(2000, 5, 20);
 TLSMemoryPoolManager<CDBPoolStruct>
 SHS::DBWriterManager::_JobPool(2000, 5, 20);
 
-void TetrisLoginServer::InitLoginServer(ULONG ip, LONG port, bool bNagleEnabled, int maxConnection)
+std::string SHS::DBTLSConnector::_sDBUser;
+std::string SHS::DBTLSConnector::_sDBName;
+std::string SHS::DBTLSConnector::_sDBPasswd;
+int         SHS::DBTLSConnector::_iDBPort;
+
+void TetrisLoginServer::InitLoginServer(bool bNagleEnabled, int maxConnection)
 {
 	mysql_library_init(0, NULL, NULL);
 
 	SYSTEM_INFO si;
 	GetSystemInfo(&si);
 
+	CConfigReader config;
+	if (!config.Load("config.txt"))
+	{
+		std::cerr << "config.txt를 열 수 없습니다." << std::endl;
+		return;
+	}
+
+	_wGameServerIP = StrToWstr(config.GetString("GameServerIP"));
+	_iGameServerPort = config.GetInt("GameServerPort");
+	int loginServerPort = config.GetInt("LoginServerPort");
+
+	std::string dbUser = config.GetString("DBUser");
+	std::string dbName = config.GetString("DBName");
+	std::string dbPasswd = config.GetString("DBPassword");
+	int dbPort = config.GetInt("DBPort");
+
+	SHS::DBTLSConnector::SetConfig(dbUser, dbName, dbPasswd, dbPort);
+
 	int workCount = (int)si.dwNumberOfProcessors * 2;
 	int concurrentCount = ((int)si.dwNumberOfProcessors / 2) - 1;
-	StartNetServer(ip, port, workCount, concurrentCount, true, maxConnection);
+	StartNetServer(INADDR_ANY, loginServerPort, workCount, concurrentCount, true, maxConnection);
 
 	_DBWriterManager = new SHS::DBWriterManager();
-	_DBWriterManager->InitDBWriterManager(workCount);
+	_DBWriterManager->InitDBWriterManager(workCount, dbUser, dbName, dbPasswd, dbPort);
 
 	_TimerThreadHandle = (HANDLE)_beginthreadex(NULL, 0, TimerThread, this, 0, &_TimerThreadID);
 }
@@ -369,12 +393,11 @@ void TetrisLoginServer::MessageProc_Login(RefCountPointer& cPacket, ULONGLONG se
 	(*cPacket)->Clear(sizeof(st_NetHeader));
 
 	// IP 주소 관련 수정 필요
-	wcsncpy_s(gameServerIP, _countof(gameServerIP), dfGAMESERVER_IP, sizeof(WCHAR) * 16);
-	wcsncpy_s(chatServerIP, _countof(chatServerIP), dfCHATSERVER_PUBLICIP, sizeof(WCHAR) * 16);
+	wcsncpy_s(gameServerIP, _countof(gameServerIP), _wGameServerIP.c_str(), sizeof(WCHAR) * 16);
 
 	status = dfTETRIS_LOGIN_OK;
 
-	mpLoginRES(cPacket, AccountNum, status, gameServerIP, (USHORT)dfGAMESERVER_PORT,
+	mpLoginRES(cPacket, AccountNum, status, gameServerIP, (USHORT)_iGameServerPort,
 		wsessionKey.c_str());
 
 	SendPacket_UniCast(sessionID, cPacket);

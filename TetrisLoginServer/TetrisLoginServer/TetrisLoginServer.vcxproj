@@ -128,6 +128,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="CConfigReader.cpp" />
     <ClCompile Include="CRingBuffer.cpp" />
     <ClCompile Include="CSerializationBuffer.cpp" />
     <ClCompile Include="DBConnector.cpp" />
@@ -138,6 +139,7 @@
     <ClCompile Include="TetrisLoginServer_MakePacket.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="CConfigReader.h" />
     <ClInclude Include="CCrashDump.h" />
     <ClInclude Include="CRingBuffer.h" />
     <ClInclude Include="CSerializationBuffer.h" />
