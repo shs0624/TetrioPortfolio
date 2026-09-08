@@ -131,7 +131,12 @@ void TetrisServer::OnRelease(ULONGLONG sessionID)
 		ReleaseSRWLockExclusive(&_UserMapLock);
 
 		AcquireSRWLockExclusive(&_AccountNumUserMapLock);
-		_AccountNumUserMap.erase(pUser->AccountNum);
+		auto itAccountNum = _AccountNumUserMap.find(pUser->AccountNum);
+		if (itAccountNum != _AccountNumUserMap.end())
+		{
+			if((*itAccountNum).second->ulSessionID == pUser->ulSessionID)
+				_AccountNumUserMap.erase(pUser->AccountNum);
+		}
 		ReleaseSRWLockExclusive(&_AccountNumUserMapLock);
 
 		_UserPool->Free(pUser);
