@@ -29,13 +29,7 @@ struct stServerLog
 	LONG _dwChatLeaveMessageTPS;
 	LONG _dwChatLeaveMessageTotal;
 
-	LONG _dwChatMessageTPS;
-	LONG _dwChatMessageTotal;
-
-	LONG _dwLoginMessageTPS;
 	LONG _dwLoginMessageTotal;
-
-	LONG _dwMatchingSuccessMessageTPS;
 	LONG _dwMatchingSuccessMessageTotal;
 
 	LONG _dwDuplicatedLoginTotal;
@@ -97,15 +91,11 @@ public:
 			_stPrintLog._dwAcceptTPS += _LogStructArr[i]->_dwAcceptTPS;
 			_stPrintLog._dwRecvMessageTPS += _LogStructArr[i]->_dwRecvMessageTPS;
 			_stPrintLog._dwSendMessageTPS += _LogStructArr[i]->_dwSendMessageTPS;
-			_stPrintLog._dwLoginMessageTPS += _LogStructArr[i]->_dwLoginMessageTPS;
 			_stPrintLog._dwChatEnterMessageTPS += _LogStructArr[i]->_dwChatEnterMessageTPS;
 			_stPrintLog._dwChatLeaveMessageTPS += _LogStructArr[i]->_dwChatLeaveMessageTPS;
-			_stPrintLog._dwChatMessageTPS += _LogStructArr[i]->_dwChatMessageTPS;
 			_stPrintLog._dwLoginMessageTotal += _LogStructArr[i]->_dwLoginMessageTotal;
 			_stPrintLog._dwChatEnterMessageTotal += _LogStructArr[i]->_dwChatEnterMessageTotal;
 			_stPrintLog._dwChatLeaveMessageTotal += _LogStructArr[i]->_dwChatLeaveMessageTotal;
-			_stPrintLog._dwChatMessageTotal += _LogStructArr[i]->_dwChatMessageTotal;
-			_stPrintLog._dwMatchingSuccessMessageTPS += _LogStructArr[i]->_dwMatchingSuccessMessageTPS;
 			_stPrintLog._dwMatchingSuccessMessageTotal += _LogStructArr[i]->_dwMatchingSuccessMessageTotal;
 			_stPrintLog._dwDuplicatedLoginTotal += _LogStructArr[i]->_dwDuplicatedLoginTotal;
 			_stPrintLog._dwDecodeDisconnectTotal += _LogStructArr[i]->_dwDecodeDisconnectTotal;
@@ -136,15 +126,11 @@ public:
 		printf("%-25s%5d\n", "RecvPacket TPS : ", _stPrintLog._dwRecvMessageTPS);
 		printf("%-25s%5d\n", "SendPacket TPS : ", _stPrintLog._dwSendMessageTPS);
 		printf("==============================================================================\n");
-		printf("%-25s%5d\n", "Contents - Login TPS :", _stPrintLog._dwLoginMessageTPS);
 		printf("%-25s%5d\n", "Contents - Chat Enter  TPS :", _stPrintLog._dwChatEnterMessageTPS);
-		printf("%-25s%5d\n", "Contents - Chat  TPS :", _stPrintLog._dwChatMessageTPS);
 		printf("%-25s%5d\n", "Contents - Chat Leave  TPS :", _stPrintLog._dwChatLeaveMessageTPS);
-		printf("%-25s%5d\n", "Contents - Matching Success TPS :", _stPrintLog._dwMatchingSuccessMessageTPS);
 		printf("==============================================================================\n");
 		printf("%-25s%5d\n", "Contents - Login Total :", _stPrintLog._dwLoginMessageTotal);
 		printf("%-25s%5d\n", "Contents - Chat Enter  Total :", _stPrintLog._dwChatEnterMessageTotal);
-		printf("%-25s%5d\n", "Contents - Chat  Total :", _stPrintLog._dwChatMessageTotal);
 		printf("%-25s%5d\n", "Contents - Chat Leave  Total :", _stPrintLog._dwChatLeaveMessageTotal);
 		printf("%-25s%5d\n", "Contents - Matching Success Total :", _stPrintLog._dwMatchingSuccessMessageTotal);
 		printf("==============================================================================\n");
@@ -194,11 +180,8 @@ private:
 		{
 			_LogStructArr[i]->_dwAcceptTPS = 0;
 
-			_LogStructArr[i]->_dwChatMessageTPS = 0;
-			_LogStructArr[i]->_dwLoginMessageTPS = 0;
 			_LogStructArr[i]->_dwChatEnterMessageTPS = 0;
 			_LogStructArr[i]->_dwChatLeaveMessageTPS = 0;
-			_LogStructArr[i]->_dwMatchingSuccessMessageTPS = 0;
 
 			_LogStructArr[i]->_dwRecvMessageTPS = 0;
 			_LogStructArr[i]->_dwSendMessageTPS = 0;

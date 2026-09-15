@@ -303,6 +303,7 @@ enum en_PACKET_TYPE
 	//	{
 	//		WORD		Type
 	//
+	//		BYTE		IsSelf // 내 블록이면 1(true)
 	//		BYTE		BlockType
 	//		BYTE		Rotate
 	//		signed char	X

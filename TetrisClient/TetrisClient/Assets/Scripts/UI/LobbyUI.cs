@@ -359,10 +359,12 @@ public class LobbyUI : MonoBehaviour
 
     void CacheRefs()
     {
-        var cv = (Canvas)Object.FindAnyObjectByType(typeof(Canvas));
-        if (cv == null) return;
-
-        var root = cv.transform;
+        // LobbyUI 자신이 로비 씬의 Canvas에 붙어있는 스크립트이므로, 씬 전체에서
+        // Canvas를 찾을 필요 없이 자기 transform을 그대로 root로 쓴다.
+        // (FindAnyObjectByType(typeof(Canvas))는 씬에 Canvas가 여러 개면 어떤 걸 반환할지
+        // 유니티 공식 문서상 "임의"라, DisconnectNoticeUI처럼 DontDestroyOnLoad로 살아남는
+        // 다른 Canvas가 있으면 엉뚱한 걸 집어서 모든 참조가 null이 되는 버그가 있었다.)
+        var root = transform;
 
         _chatScroll   = Find<ScrollRect>(root,      "ChatHistoryScroll");
         _chatContent  = Find<Transform>(root,        "ChatHistoryContent");

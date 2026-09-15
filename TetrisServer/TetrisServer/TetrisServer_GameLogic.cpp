@@ -120,7 +120,6 @@ bool TetrisServer::SetGameSession(st_USER* pUser1, st_USER* pUser2)
 		return false;
 	}
 
-	_pLog._dwMatchingSuccessMessageTPS++;
 	_pLog._dwMatchingSuccessMessageTotal++;
 
 	if (!SendPacket_UniCast(pUser2->ulSessionID, matchingSuccessPacket2))
@@ -129,7 +128,6 @@ bool TetrisServer::SetGameSession(st_USER* pUser1, st_USER* pUser2)
 		return false;
 	}
 
-	_pLog._dwMatchingSuccessMessageTPS++;
 	_pLog._dwMatchingSuccessMessageTotal++;
 
 	return true;
@@ -205,11 +203,23 @@ void TetrisServer::UpdatePlay(st_GAMESESSION* pGameSession)
 				// 블록 업데이트
 				RefCountPointer blockUpdatePacket = RefCountPointer::MakeSharedPtr();
 				(*blockUpdatePacket)->Clear(sizeof(st_NetHeader));
-				mpACKBlockUpdate(blockUpdatePacket, pGameInfo->_DropBlock, pGameInfo->_DropRotate, pGameInfo->_DropX, pGameInfo->_DropY);
+				mpACKBlockUpdate(blockUpdatePacket, true, pGameInfo->_DropBlock, pGameInfo->_DropRotate, pGameInfo->_DropX, pGameInfo->_DropY);
 
 				if (!SendPacket_UniCast(pGameSession->_SessionIDArr[i], blockUpdatePacket))
 				{
 					EndGameSession(pGameSession, 1 - i, -1);
+					ReleaseSRWLockExclusive(&pGameSession->_GameSessionLock);
+					return;
+				}
+
+				// 상대방 업데이트
+				RefCountPointer opponetPacket = RefCountPointer::MakeSharedPtr();
+				(*opponetPacket)->Clear(sizeof(st_NetHeader));
+				mpACKBlockUpdate(opponetPacket, false, pGameInfo->_DropBlock, pGameInfo->_DropRotate, pGameInfo->_DropX, pGameInfo->_DropY);
+
+				if (!SendPacket_UniCast(pGameSession->_SessionIDArr[1 - i], opponetPacket))
+				{
+					EndGameSession(pGameSession, i, -1);
 					ReleaseSRWLockExclusive(&pGameSession->_GameSessionLock);
 					return;
 				}
@@ -486,6 +496,7 @@ void TetrisServer::Damage(st_GAMESESSION* pGameSession, int sessionIndex)
 void TetrisServer::UpdateBoard(st_GAMESESSION* pGameSession, int sessionIndex)
 {
 	st_GameInfo* pGameInfo = &(pGameSession->_GameInfoArr[sessionIndex]);
+	st_GameInfo* opGameInfo = &(pGameSession->_GameInfoArr[1 - sessionIndex]);
 
 	for (int x = 0; x < BLOCK_ARR_LENGTH; x++)
 	{
@@ -522,12 +533,24 @@ void TetrisServer::UpdateBoard(st_GAMESESSION* pGameSession, int sessionIndex)
 	// 현재 보드 상태를 전송
 	RefCountPointer boardUpdatePacket = RefCountPointer::MakeSharedPtr();
 	(*boardUpdatePacket)->Clear(sizeof(st_NetHeader));
-	mpACKBoardUpdate(boardUpdatePacket, pGameInfo->_HoldingBlock, nextBlockBag, (BYTE*)(pGameSession->_GameInfoArr[sessionIndex]._GameBoard),
-		(BYTE*)(pGameSession->_GameInfoArr[1 - sessionIndex]._GameBoard));
+	mpACKBoardUpdate(boardUpdatePacket, pGameInfo->_HoldingBlock, nextBlockBag, (BYTE*)(pGameInfo->_GameBoard),
+		(BYTE*)(opGameInfo->_GameBoard));
 
 	if (!SendPacket_UniCast(pGameSession->_SessionIDArr[sessionIndex], boardUpdatePacket))
 	{
 		EndGameSession(pGameSession, 1 - sessionIndex, -1);
+		return;
+	}
+
+	// 상대에게 보드 전달
+	RefCountPointer opponentPacket = RefCountPointer::MakeSharedPtr();
+	(*opponentPacket)->Clear(sizeof(st_NetHeader));
+	mpACKBoardUpdate(opponentPacket, opGameInfo->_HoldingBlock, nextBlockBag, (BYTE*)(opGameInfo->_GameBoard),
+		(BYTE*)(pGameInfo->_GameBoard));
+
+	if (!SendPacket_UniCast(pGameSession->_SessionIDArr[1 - sessionIndex], opponentPacket))
+	{
+		EndGameSession(pGameSession, sessionIndex, -1);
 		return;
 	}
 }
@@ -551,11 +574,22 @@ void TetrisServer::CreateBlock(st_GAMESESSION* pGameSession, int sessionIndex)
 	// 스폰
 	RefCountPointer blockUpdatePacket = RefCountPointer::MakeSharedPtr();
 	(*blockUpdatePacket)->Clear(sizeof(st_NetHeader));
-	mpACKBlockUpdate(blockUpdatePacket, nextBlock, 0, pGameInfo->_DropX, pGameInfo->_DropY);
+	mpACKBlockUpdate(blockUpdatePacket, true, nextBlock, 0, pGameInfo->_DropX, pGameInfo->_DropY);
 
 	if (!SendPacket_UniCast(pGameSession->_SessionIDArr[sessionIndex], blockUpdatePacket))
 	{
 		EndGameSession(pGameSession, 1 - sessionIndex, -1);
+		return;
+	}
+
+	// 스폰
+	RefCountPointer opponentBlockPacket = RefCountPointer::MakeSharedPtr();
+	(*opponentBlockPacket)->Clear(sizeof(st_NetHeader));
+	mpACKBlockUpdate(opponentBlockPacket, false, nextBlock, 0, pGameInfo->_DropX, pGameInfo->_DropY);
+
+	if (!SendPacket_UniCast(pGameSession->_SessionIDArr[1 - sessionIndex], opponentBlockPacket))
+	{
+		EndGameSession(pGameSession, sessionIndex, -1);
 		return;
 	}
 

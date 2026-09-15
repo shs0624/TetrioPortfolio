@@ -104,11 +104,12 @@ void TetrisServer::mpACKBoardUpdate(RefCountPointer& cPacket, enTetBlock holding
 	(*cPacket)->PutData((char*)pOpBoard, sizeof(BYTE) * 200);
 }
 
-void TetrisServer::mpACKBlockUpdate(RefCountPointer& cPacket, BYTE blockType, BYTE rotate, signed char x, signed char y)
+void TetrisServer::mpACKBlockUpdate(RefCountPointer& cPacket, BYTE isOpponent, BYTE blockType, BYTE rotate, signed char x, signed char y)
 {
 	en_PACKET_TYPE packetType = en_PACKET_SC_TETRIS_ACK_GAME_BLOCKUPDATE;
 
 	(**cPacket) << (WORD)packetType;
+	(**cPacket) << isOpponent;
 	(**cPacket) << blockType;
 	(**cPacket) << rotate;
 	(**cPacket) << (char)x;

@@ -75,7 +75,7 @@ private:
 	void mpACKCountDown(RefCountPointer& cPacket, WORD count);
 
 	void mpACKBoardUpdate(RefCountPointer& cPacket, enTetBlock holdingBlock, enTetBlock* NextBlockBag, BYTE* pMyBoard, BYTE* pOpBoard, BYTE clearCount = 0, BYTE clearY = 0);
-	void mpACKBlockUpdate(RefCountPointer& cPacket, BYTE blockType, BYTE rotate, signed char x, signed char y);
+	void mpACKBlockUpdate(RefCountPointer& cPacket, BYTE isOpponent, BYTE blockType, BYTE rotate, signed char x, signed char y);
 	void mpACKDamage(RefCountPointer& cPacket, BYTE damageCount);
 	void mpACKGameResult(RefCountPointer& cPacket, BYTE gameResultFlag);
 	void mpRESReturnChat(RefCountPointer& cPacket, BYTE status);

@@ -107,8 +107,9 @@ public class Client : MonoBehaviour
     public event Action<int> OnCountdown;
     /// <summary>보드 스냅샷 수신 (holdingBlock, nextBag[5], myBoard[200], opponentBoard[200] — 보드 둘 다 row-major, row0=서버 상단)</summary>
     public event Action<TetBlockType, TetBlockType[], byte[], byte[]> OnBoardUpdate;
-    /// <summary>현재 낙하 중인 블록 갱신 (blockType, rotate, x, y) — x/y는 signed(음수 원점 가능)</summary>
-    public event Action<TetBlockType, byte, sbyte, sbyte> OnBlockUpdate;
+    /// <summary>현재 낙하 중인 블록 갱신 (isSelf, blockType, rotate, x, y) — x/y는 signed(음수 원점 가능).
+    /// isSelf가 false면 상대방의 낙하 블록 정보(서버 필드명은 IsOpponent지만 실제론 반대 의미 — 1이면 자기 자신 블록).</summary>
+    public event Action<bool, TetBlockType, byte, sbyte, sbyte> OnBlockUpdate;
     /// <summary>대기 중인 가비지(데미지) 줄 수 갱신 (본인 기준)</summary>
     public event Action<int> OnDamageUpdate;
     /// <summary>게임 결과 통지 (isWin) — true면 승리, false면 패배</summary>
@@ -727,21 +728,22 @@ public class Client : MonoBehaviour
         OnBoardUpdate?.Invoke(holdingBlock, nextBag, myBoard, opponentBoard);
     }
 
-    // S -> C 낙하 중인 블록 갱신. body: BlockType(1) + Rotate(1) + X(1, signed char) + Y(1, signed char)
+    // S -> C 낙하 중인 블록 갱신. body: IsSelf(1, 서버 필드명은 IsOpponent지만 1=자기 자신 블록) + BlockType(1) + Rotate(1) + X(1, signed char) + Y(1, signed char)
     void HandleBlockUpdate(byte[] body)
     {
-        if (body.Length < 4)
+        if (body.Length < 5)
         {
             Debug.LogWarning("[Client] BlockUpdate body too short.");
             return;
         }
 
-        var blockType = (TetBlockType)body[0];
-        byte rotate   = body[1];
-        sbyte x       = unchecked((sbyte)body[2]);
-        sbyte y       = unchecked((sbyte)body[3]);
+        bool isSelf   = body[0] != 0;
+        var blockType = (TetBlockType)body[1];
+        byte rotate   = body[2];
+        sbyte x       = unchecked((sbyte)body[3]);
+        sbyte y       = unchecked((sbyte)body[4]);
 
-        OnBlockUpdate?.Invoke(blockType, rotate, x, y);
+        OnBlockUpdate?.Invoke(isSelf, blockType, rotate, x, y);
     }
 
     // S -> C 대기 가비지(데미지) 갱신. body: DamageCount(1)

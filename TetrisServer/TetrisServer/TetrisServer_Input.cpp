@@ -37,12 +37,24 @@ void TetrisServer::MoveLeft(st_GAMESESSION* pGameSession, int sessionIndex, RefC
 	pGameInfo->_DropX -= 1;
 
 	(*cPacket)->Clear(sizeof(st_NetHeader));
-	mpACKBlockUpdate(cPacket, pGameInfo->_DropBlock, pGameInfo->_DropRotate, pGameInfo->_DropX, pGameInfo->_DropY);
+	mpACKBlockUpdate(cPacket, true, pGameInfo->_DropBlock, pGameInfo->_DropRotate, pGameInfo->_DropX, pGameInfo->_DropY);
 	ReleaseSRWLockExclusive(&pGameSession->_GameSessionLock);
 
 	if (!SendPacket_UniCast(sessionID, cPacket))
 	{
 		EndGameSession(pGameSession, 1 - sessionIndex, -1);
+		return;
+	}
+
+	// 상대편에게도 전송
+	RefCountPointer blockUpdatePacket = RefCountPointer::MakeSharedPtr();
+	(*blockUpdatePacket)->Clear(sizeof(st_NetHeader));
+	mpACKBlockUpdate(blockUpdatePacket, false, pGameInfo->_DropBlock, pGameInfo->_DropRotate, pGameInfo->_DropX, pGameInfo->_DropY);
+
+	if (!SendPacket_UniCast(pGameSession->_SessionIDArr[1 - sessionIndex], blockUpdatePacket))
+	{
+		EndGameSession(pGameSession, sessionIndex, -1);
+		ReleaseSRWLockExclusive(&pGameSession->_GameSessionLock);
 		return;
 	}
 
@@ -79,16 +91,30 @@ void TetrisServer::MoveRight(st_GAMESESSION* pGameSession, int sessionIndex, Ref
 	pGameInfo->_DropX += 1;
 
 	(*cPacket)->Clear(sizeof(st_NetHeader));
-	mpACKBlockUpdate(cPacket, pGameInfo->_DropBlock, pGameInfo->_DropRotate, pGameInfo->_DropX, pGameInfo->_DropY);
-	ReleaseSRWLockExclusive(&pGameSession->_GameSessionLock);
+	mpACKBlockUpdate(cPacket, true, pGameInfo->_DropBlock, pGameInfo->_DropRotate, pGameInfo->_DropX, pGameInfo->_DropY);
 
 	if (!SendPacket_UniCast(sessionID, cPacket))
 	{
 		EndGameSession(pGameSession, 1 - sessionIndex, -1);
+		ReleaseSRWLockExclusive(&pGameSession->_GameSessionLock);
+		return;
+	}
+
+	// 상대편에게도 전송
+	RefCountPointer blockUpdatePacket = RefCountPointer::MakeSharedPtr();
+	(*blockUpdatePacket)->Clear(sizeof(st_NetHeader));
+	mpACKBlockUpdate(blockUpdatePacket, false, pGameInfo->_DropBlock, pGameInfo->_DropRotate, pGameInfo->_DropX, pGameInfo->_DropY);
+
+	if (!SendPacket_UniCast(pGameSession->_SessionIDArr[1 - sessionIndex], blockUpdatePacket))
+	{
+		EndGameSession(pGameSession, sessionIndex, -1);
+		ReleaseSRWLockExclusive(&pGameSession->_GameSessionLock);
 		return;
 	}
 
 	// @@TODO : 로그찍기
+
+	ReleaseSRWLockExclusive(&pGameSession->_GameSessionLock);
 }
 
 void TetrisServer::SoftDrop(st_GAMESESSION* pGameSession, int sessionIndex, RefCountPointer& cPacket)
@@ -123,12 +149,24 @@ void TetrisServer::SoftDrop(st_GAMESESSION* pGameSession, int sessionIndex, RefC
 	pGameInfo->_DropY += 1;
 
 	(*cPacket)->Clear(sizeof(st_NetHeader));
-	mpACKBlockUpdate(cPacket, pGameInfo->_DropBlock, pGameInfo->_DropRotate, pGameInfo->_DropX, pGameInfo->_DropY);
+	mpACKBlockUpdate(cPacket, true, pGameInfo->_DropBlock, pGameInfo->_DropRotate, pGameInfo->_DropX, pGameInfo->_DropY);
 	ReleaseSRWLockExclusive(&pGameSession->_GameSessionLock);
 
 	if (!SendPacket_UniCast(sessionID, cPacket))
 	{
 		EndGameSession(pGameSession, 1 - sessionIndex, -1);
+		return;
+	}
+
+	// 상대편에게도 전송
+	RefCountPointer blockUpdatePacket = RefCountPointer::MakeSharedPtr();
+	(*blockUpdatePacket)->Clear(sizeof(st_NetHeader));
+	mpACKBlockUpdate(blockUpdatePacket, false, pGameInfo->_DropBlock, pGameInfo->_DropRotate, pGameInfo->_DropX, pGameInfo->_DropY);
+
+	if (!SendPacket_UniCast(pGameSession->_SessionIDArr[1 - sessionIndex], blockUpdatePacket))
+	{
+		EndGameSession(pGameSession, sessionIndex, -1);
+		ReleaseSRWLockExclusive(&pGameSession->_GameSessionLock);
 		return;
 	}
 
@@ -255,16 +293,29 @@ void TetrisServer::Rotate(st_GAMESESSION* pGameSession, int sessionIndex, bool c
 		pGameInfo->_DropY = ny;
 
 		(*cPacket)->Clear(sizeof(st_NetHeader));
-		mpACKBlockUpdate(cPacket, pGameInfo->_DropBlock, pGameInfo->_DropRotate, pGameInfo->_DropX, pGameInfo->_DropY);
-		ReleaseSRWLockExclusive(&pGameSession->_GameSessionLock);
+		mpACKBlockUpdate(cPacket, true, pGameInfo->_DropBlock, pGameInfo->_DropRotate, pGameInfo->_DropX, pGameInfo->_DropY);
 
 		if (!SendPacket_UniCast(sessionID, cPacket))
 		{
 			EndGameSession(pGameSession, 1 - sessionIndex, -1);
+			ReleaseSRWLockExclusive(&pGameSession->_GameSessionLock);
+			return;
+		}
+
+		// 상대편에게도 전송
+		RefCountPointer blockUpdatePacket = RefCountPointer::MakeSharedPtr();
+		(*blockUpdatePacket)->Clear(sizeof(st_NetHeader));
+		mpACKBlockUpdate(blockUpdatePacket, false, pGameInfo->_DropBlock, pGameInfo->_DropRotate, pGameInfo->_DropX, pGameInfo->_DropY);
+
+		if (!SendPacket_UniCast(pGameSession->_SessionIDArr[1 - sessionIndex], blockUpdatePacket))
+		{
+			EndGameSession(pGameSession, sessionIndex, -1);
+			ReleaseSRWLockExclusive(&pGameSession->_GameSessionLock);
 			return;
 		}
 
 		// @@TODO : 로그찍기
+		ReleaseSRWLockExclusive(&pGameSession->_GameSessionLock);
 
 		return;
 	}
@@ -307,8 +358,20 @@ void TetrisServer::Hold(st_GAMESESSION* pGameSession, int sessionIndex, RefCount
 
 		// 블록 업데이트 패킷 전송
 		(*cPacket)->Clear(sizeof(st_NetHeader));
-		mpACKBlockUpdate(cPacket, pGameInfo->_DropBlock, pGameInfo->_DropRotate, pGameInfo->_DropX, pGameInfo->_DropY);
+		mpACKBlockUpdate(cPacket, true, pGameInfo->_DropBlock, pGameInfo->_DropRotate, pGameInfo->_DropX, pGameInfo->_DropY);
 		
+		// 상대편에게도 전송
+		RefCountPointer blockUpdatePacket = RefCountPointer::MakeSharedPtr();
+		(*blockUpdatePacket)->Clear(sizeof(st_NetHeader));
+		mpACKBlockUpdate(blockUpdatePacket, false, pGameInfo->_DropBlock, pGameInfo->_DropRotate, pGameInfo->_DropX, pGameInfo->_DropY);
+
+		if (!SendPacket_UniCast(pGameSession->_SessionIDArr[1 - sessionIndex], blockUpdatePacket))
+		{
+			EndGameSession(pGameSession, sessionIndex, -1);
+			ReleaseSRWLockExclusive(&pGameSession->_GameSessionLock);
+			return;
+		}
+
 		// @@TODO : 로그찍기
 
 		// 현재 보드 상태를 전송 (생성예정 큐 보내기 위함)
@@ -345,7 +408,19 @@ void TetrisServer::Hold(st_GAMESESSION* pGameSession, int sessionIndex, RefCount
 
 		// 블록 업데이트 패킷 전송
 		(*cPacket)->Clear(sizeof(st_NetHeader));
-		mpACKBlockUpdate(cPacket, pGameInfo->_DropBlock, pGameInfo->_DropRotate, pGameInfo->_DropX, pGameInfo->_DropY);
+		mpACKBlockUpdate(cPacket, true, pGameInfo->_DropBlock, pGameInfo->_DropRotate, pGameInfo->_DropX, pGameInfo->_DropY);
+
+		// 상대편에게도 전송
+		RefCountPointer blockUpdatePacket = RefCountPointer::MakeSharedPtr();
+		(*blockUpdatePacket)->Clear(sizeof(st_NetHeader));
+		mpACKBlockUpdate(blockUpdatePacket, false, pGameInfo->_DropBlock, pGameInfo->_DropRotate, pGameInfo->_DropX, pGameInfo->_DropY);
+
+		if (!SendPacket_UniCast(pGameSession->_SessionIDArr[1 - sessionIndex], blockUpdatePacket))
+		{
+			EndGameSession(pGameSession, sessionIndex, -1);
+			ReleaseSRWLockExclusive(&pGameSession->_GameSessionLock);
+			return;
+		}
 
 		// 현재 보드 상태를 전송 (생성예정 큐 보내기 위함)
 		RefCountPointer boardUpdatePacket = RefCountPointer::MakeSharedPtr();

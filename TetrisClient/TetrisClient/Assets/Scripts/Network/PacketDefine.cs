@@ -35,7 +35,7 @@ public enum PacketID : ushort
 
     // S -> C : NextBlockBag[5](WORD, enTetBlock) + MyBoard[20][10](BYTE) + OpponentBoard[20][10](BYTE)
     TETRIS_SC_ACK_GAME_BOARDUPDATE     = 20,
-    // S -> C : BlockType(1, enTetBlock) + Rotate(1) + X(1, signed char) + Y(1, signed char)
+    // S -> C : IsSelf(1, BYTE, 서버 필드명은 IsOpponent지만 실제론 1=자기 자신 블록) + BlockType(1) + Rotate(1) + X(1, signed char) + Y(1, signed char)
     TETRIS_SC_ACK_GAME_BLOCKUPDATE     = 21,
     // S -> C : DamageCount(1, BYTE) — 아직 적용 안 된 대기 가비지 줄 수(받는 사람 자신 기준)
     TETRIS_ACK_GAME_DAMAGE             = 22,

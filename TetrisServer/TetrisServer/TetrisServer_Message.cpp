@@ -153,7 +153,6 @@ void TetrisServer::MessageProc_Login(ULONGLONG sessionID, RefCountPointer& cPack
 	
 	EnterChat(userPtr);
 
-	_pLog._dwLoginMessageTPS++;
 	_pLog._dwLoginMessageTotal++;
 }
 
@@ -228,9 +227,6 @@ void TetrisServer::MessageProc_ChatMessage(ULONGLONG sessionID, RefCountPointer&
 	// 자신 포함해서 다 보냈으니 1을 줄여야 짝이 맞는다.
 	if (!cPacket.DecRefCount())
 		_pLog._dwPacketPoolUse--;
-
-	_pLog._dwChatMessageTPS++;
-	_pLog._dwChatMessageTotal++;
 }
 
 void TetrisServer::MessageProc_MatchingReq(ULONGLONG sessionID, RefCountPointer& cPacket)

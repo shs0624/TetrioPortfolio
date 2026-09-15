@@ -20,6 +20,7 @@ public class GameManager : MonoBehaviour
     [Header("Scene References")]
     public Board board;
     public Piece piece;
+    public OpponentBoardUI opponentBoardUI;
 
     [Header("Block Visuals (I O T S Z J L)")]
     public Sprite[]  blockSprites;
@@ -47,10 +48,6 @@ public class GameManager : MonoBehaviour
     private CountdownUI _countdownUI;
     private bool        _countdownFinished; // 카운트다운이 끝나기 전에는 입력을 보내지 않는다.
 
-    // ── Opponent board ───────────────────────────────────────────────────────
-    // 아직 상대방 보드 렌더링 UI가 없어 데이터만 보관한다. (row-major, row0=서버 상단, 200바이트)
-    private byte[] _lastOpponentBoard;
-
     // ── Damage meter ─────────────────────────────────────────────────────────
     private DamageMeterUI _damageMeter;
 
@@ -71,6 +68,8 @@ public class GameManager : MonoBehaviour
         _damageMeter = new GameObject("DamageMeter").AddComponent<DamageMeterUI>();
         _damageMeter.Init(board, blockSprites, blockMaterial);
         _damageMeter.SetCount(0); // 첫 패킷이 오기 전엔 빈 상태로 시작
+
+        opponentBoardUI.Init(blockSprites, blockMaterial);
 
         _gameResultUI = Object.FindAnyObjectByType<GameResultUI>(FindObjectsInactive.Include);
         if (_gameResultUI == null)
@@ -216,7 +215,7 @@ public class GameManager : MonoBehaviour
 
     // ── Server hooks ─────────────────────────────────────────────────────────
 
-    /// <summary>Client.OnBoardUpdate 콜백. 내 보드/홀드 표시를 갱신하고, 상대 보드/다음 블록은 보관만 한다.</summary>
+    /// <summary>Client.OnBoardUpdate 콜백. 내 보드/홀드 표시와 상대 보드 미리보기를 갱신한다.</summary>
     private void OnServerBoardUpdate(TetBlockType holdingBlock, TetBlockType[] nextBag, byte[] myBoard, byte[] opponentBoard)
     {
         board.ApplyServerBoard(myBoard);
@@ -225,13 +224,19 @@ public class GameManager : MonoBehaviour
         _heldType = holdingBlock == TetBlockType.NoneBlock ? (TetBlockType?)null : holdingBlock;
         UpdateHoldDisplay();
 
-        _lastOpponentBoard = opponentBoard; // [SERVER_HOOK] 상대방 보드 UI가 생기면 여기서 그리면 됨
+        opponentBoardUI.ApplyBoard(opponentBoard);
         Debug.Log($"[GameManager] BOARDUPDATE 수신. Hold={holdingBlock} NextBag=[{string.Join(",", nextBag)}]");
     }
 
-    /// <summary>Client.OnBlockUpdate 콜백. 현재 낙하 중인 블록 위치/모양을 갱신한다.</summary>
-    private void OnServerBlockUpdate(TetBlockType blockType, byte rotate, sbyte x, sbyte y)
-        => piece.ApplyServerState(board, blockType, rotate, x, y);
+    /// <summary>Client.OnBlockUpdate 콜백. 현재 낙하 중인 블록 위치/모양을 갱신한다.
+    /// isSelf면 내 piece에, 아니면 상대 보드 미리보기(OpponentBoardUI)에 반영한다.</summary>
+    private void OnServerBlockUpdate(bool isSelf, TetBlockType blockType, byte rotate, sbyte x, sbyte y)
+    {
+        if (isSelf)
+            piece.ApplyServerState(board, blockType, rotate, x, y);
+        else
+            opponentBoardUI.ApplyPiece(blockType, rotate, x, y);
+    }
 
     /// <summary>Client.OnDamageUpdate 콜백. 대기 중인 가비지 미터를 갱신한다.</summary>
     private void OnServerDamageUpdate(int count) => _damageMeter.SetCount(count);
