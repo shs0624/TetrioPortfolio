@@ -38,11 +38,11 @@ void TetrisServer::MoveLeft(st_GAMESESSION* pGameSession, int sessionIndex, RefC
 
 	(*cPacket)->Clear(sizeof(st_NetHeader));
 	mpACKBlockUpdate(cPacket, true, pGameInfo->_DropBlock, pGameInfo->_DropRotate, pGameInfo->_DropX, pGameInfo->_DropY);
-	ReleaseSRWLockExclusive(&pGameSession->_GameSessionLock);
-
+	
 	if (!SendPacket_UniCast(sessionID, cPacket))
 	{
 		EndGameSession(pGameSession, 1 - sessionIndex, -1);
+		ReleaseSRWLockExclusive(&pGameSession->_GameSessionLock);
 		return;
 	}
 
@@ -50,6 +50,7 @@ void TetrisServer::MoveLeft(st_GAMESESSION* pGameSession, int sessionIndex, RefC
 	RefCountPointer blockUpdatePacket = RefCountPointer::MakeSharedPtr();
 	(*blockUpdatePacket)->Clear(sizeof(st_NetHeader));
 	mpACKBlockUpdate(blockUpdatePacket, false, pGameInfo->_DropBlock, pGameInfo->_DropRotate, pGameInfo->_DropX, pGameInfo->_DropY);
+	_pLog._dwPacketPoolUse++;
 
 	if (!SendPacket_UniCast(pGameSession->_SessionIDArr[1 - sessionIndex], blockUpdatePacket))
 	{
@@ -58,6 +59,7 @@ void TetrisServer::MoveLeft(st_GAMESESSION* pGameSession, int sessionIndex, RefC
 		return;
 	}
 
+	ReleaseSRWLockExclusive(&pGameSession->_GameSessionLock);
 	// @@TODO : ·Î±×Âï±â
 }
 
@@ -104,6 +106,7 @@ void TetrisServer::MoveRight(st_GAMESESSION* pGameSession, int sessionIndex, Ref
 	RefCountPointer blockUpdatePacket = RefCountPointer::MakeSharedPtr();
 	(*blockUpdatePacket)->Clear(sizeof(st_NetHeader));
 	mpACKBlockUpdate(blockUpdatePacket, false, pGameInfo->_DropBlock, pGameInfo->_DropRotate, pGameInfo->_DropX, pGameInfo->_DropY);
+	_pLog._dwPacketPoolUse++;
 
 	if (!SendPacket_UniCast(pGameSession->_SessionIDArr[1 - sessionIndex], blockUpdatePacket))
 	{
@@ -150,11 +153,11 @@ void TetrisServer::SoftDrop(st_GAMESESSION* pGameSession, int sessionIndex, RefC
 
 	(*cPacket)->Clear(sizeof(st_NetHeader));
 	mpACKBlockUpdate(cPacket, true, pGameInfo->_DropBlock, pGameInfo->_DropRotate, pGameInfo->_DropX, pGameInfo->_DropY);
-	ReleaseSRWLockExclusive(&pGameSession->_GameSessionLock);
 
 	if (!SendPacket_UniCast(sessionID, cPacket))
 	{
 		EndGameSession(pGameSession, 1 - sessionIndex, -1);
+		ReleaseSRWLockExclusive(&pGameSession->_GameSessionLock);
 		return;
 	}
 
@@ -162,6 +165,7 @@ void TetrisServer::SoftDrop(st_GAMESESSION* pGameSession, int sessionIndex, RefC
 	RefCountPointer blockUpdatePacket = RefCountPointer::MakeSharedPtr();
 	(*blockUpdatePacket)->Clear(sizeof(st_NetHeader));
 	mpACKBlockUpdate(blockUpdatePacket, false, pGameInfo->_DropBlock, pGameInfo->_DropRotate, pGameInfo->_DropX, pGameInfo->_DropY);
+	_pLog._dwPacketPoolUse++;
 
 	if (!SendPacket_UniCast(pGameSession->_SessionIDArr[1 - sessionIndex], blockUpdatePacket))
 	{
@@ -170,6 +174,7 @@ void TetrisServer::SoftDrop(st_GAMESESSION* pGameSession, int sessionIndex, RefC
 		return;
 	}
 
+	ReleaseSRWLockExclusive(&pGameSession->_GameSessionLock);
 	// @@TODO : ·Î±×Âï±â
 }
 
@@ -306,6 +311,7 @@ void TetrisServer::Rotate(st_GAMESESSION* pGameSession, int sessionIndex, bool c
 		RefCountPointer blockUpdatePacket = RefCountPointer::MakeSharedPtr();
 		(*blockUpdatePacket)->Clear(sizeof(st_NetHeader));
 		mpACKBlockUpdate(blockUpdatePacket, false, pGameInfo->_DropBlock, pGameInfo->_DropRotate, pGameInfo->_DropX, pGameInfo->_DropY);
+		_pLog._dwPacketPoolUse++;
 
 		if (!SendPacket_UniCast(pGameSession->_SessionIDArr[1 - sessionIndex], blockUpdatePacket))
 		{
@@ -364,6 +370,7 @@ void TetrisServer::Hold(st_GAMESESSION* pGameSession, int sessionIndex, RefCount
 		RefCountPointer blockUpdatePacket = RefCountPointer::MakeSharedPtr();
 		(*blockUpdatePacket)->Clear(sizeof(st_NetHeader));
 		mpACKBlockUpdate(blockUpdatePacket, false, pGameInfo->_DropBlock, pGameInfo->_DropRotate, pGameInfo->_DropX, pGameInfo->_DropY);
+		_pLog._dwPacketPoolUse++;
 
 		if (!SendPacket_UniCast(pGameSession->_SessionIDArr[1 - sessionIndex], blockUpdatePacket))
 		{
@@ -379,6 +386,7 @@ void TetrisServer::Hold(st_GAMESESSION* pGameSession, int sessionIndex, RefCount
 		(*boardUpdatePacket)->Clear(sizeof(st_NetHeader));
 		mpACKBoardUpdate(boardUpdatePacket, pGameInfo->_HoldingBlock, nextBlockBag, (BYTE*)(pGameSession->_GameInfoArr[sessionIndex]._GameBoard),
 			(BYTE*)(pGameSession->_GameInfoArr[1 - sessionIndex]._GameBoard));
+		_pLog._dwPacketPoolUse++;
 
 		ReleaseSRWLockExclusive(&pGameSession->_GameSessionLock);
 
@@ -414,6 +422,7 @@ void TetrisServer::Hold(st_GAMESESSION* pGameSession, int sessionIndex, RefCount
 		RefCountPointer blockUpdatePacket = RefCountPointer::MakeSharedPtr();
 		(*blockUpdatePacket)->Clear(sizeof(st_NetHeader));
 		mpACKBlockUpdate(blockUpdatePacket, false, pGameInfo->_DropBlock, pGameInfo->_DropRotate, pGameInfo->_DropX, pGameInfo->_DropY);
+		_pLog._dwPacketPoolUse++;
 
 		if (!SendPacket_UniCast(pGameSession->_SessionIDArr[1 - sessionIndex], blockUpdatePacket))
 		{
@@ -427,6 +436,7 @@ void TetrisServer::Hold(st_GAMESESSION* pGameSession, int sessionIndex, RefCount
 		(*boardUpdatePacket)->Clear(sizeof(st_NetHeader));
 		mpACKBoardUpdate(boardUpdatePacket, pGameInfo->_HoldingBlock, nextBlockBag, (BYTE*)(pGameSession->_GameInfoArr[sessionIndex]._GameBoard),
 			(BYTE*)(pGameSession->_GameInfoArr[1 - sessionIndex]._GameBoard));
+		_pLog._dwPacketPoolUse++;
 
 		ReleaseSRWLockExclusive(&pGameSession->_GameSessionLock);
 

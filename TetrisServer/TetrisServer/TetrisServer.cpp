@@ -99,6 +99,10 @@ void TetrisServer::OnRecv(ULONGLONG sessionID, RefCountPointer& cPacket)
 	case en_PACKET_CS_TETRIS_REQ_MATCHING_CANCEL:
 		MessageProc_MatchingCancelReq(sessionID, cPacket);
 		break;
+	default:
+		if (!cPacket.DecRefCount())
+			_pLog._dwPacketPoolUse--;
+		break;
 	}
 }
 

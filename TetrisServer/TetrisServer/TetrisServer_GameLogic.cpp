@@ -11,6 +11,7 @@ unsigned int WINAPI TetrisServer::GameTickThread(LPVOID arg)
 {
 	// 30fps
 	TetrisServer* pGameServer = (TetrisServer*)arg;
+	pGameServer->RegisterNetServerLog(arg);
 
 	// 사용하는 게임 세션 배열 인덱스
 	unsigned int idx = (_InterlockedIncrement(&pGameServer->_GameSessionThreadCount) - 1);
@@ -109,10 +110,12 @@ bool TetrisServer::SetGameSession(st_USER* pUser1, st_USER* pUser2)
 	RefCountPointer matchingSuccessPacket1 = RefCountPointer::MakeSharedPtr();
 	(*matchingSuccessPacket1)->Clear(sizeof(st_NetHeader));
 	mpRESMatchingSuccess(matchingSuccessPacket1, pUser1->AccountNum, pUser2->AccountNum, pUser2->NickName);
+	_pLog._dwPacketPoolUse++;
 
 	RefCountPointer matchingSuccessPacket2 = RefCountPointer::MakeSharedPtr();
 	(*matchingSuccessPacket2)->Clear(sizeof(st_NetHeader));
 	mpRESMatchingSuccess(matchingSuccessPacket2, pUser2->AccountNum, pUser1->AccountNum, pUser1->NickName);
+	_pLog._dwPacketPoolUse++;
 
 	if (!SendPacket_UniCast(pUser1->ulSessionID, matchingSuccessPacket1))
 	{
@@ -143,6 +146,7 @@ void TetrisServer::EndGameSession(st_GAMESESSION* pGameSession, int winnerIdx, i
 		RefCountPointer winResultPacket = RefCountPointer::MakeSharedPtr();
 		(*winResultPacket)->Clear(sizeof(st_NetHeader));
 		mpACKGameResult(winResultPacket, true);
+		_pLog._dwPacketPoolUse++;
 
 		SendPacket_UniCast(winnerSessionID, winResultPacket);
 	}
@@ -155,6 +159,7 @@ void TetrisServer::EndGameSession(st_GAMESESSION* pGameSession, int winnerIdx, i
 		RefCountPointer loseResultPacket = RefCountPointer::MakeSharedPtr();
 		(*loseResultPacket)->Clear(sizeof(st_NetHeader));
 		mpACKGameResult(loseResultPacket, false);
+		_pLog._dwPacketPoolUse++;
 
 		SendPacket_UniCast(loserSessionID, loseResultPacket);
 	}
@@ -204,6 +209,7 @@ void TetrisServer::UpdatePlay(st_GAMESESSION* pGameSession)
 				RefCountPointer blockUpdatePacket = RefCountPointer::MakeSharedPtr();
 				(*blockUpdatePacket)->Clear(sizeof(st_NetHeader));
 				mpACKBlockUpdate(blockUpdatePacket, true, pGameInfo->_DropBlock, pGameInfo->_DropRotate, pGameInfo->_DropX, pGameInfo->_DropY);
+				_pLog._dwPacketPoolUse++;
 
 				if (!SendPacket_UniCast(pGameSession->_SessionIDArr[i], blockUpdatePacket))
 				{
@@ -216,6 +222,7 @@ void TetrisServer::UpdatePlay(st_GAMESESSION* pGameSession)
 				RefCountPointer opponetPacket = RefCountPointer::MakeSharedPtr();
 				(*opponetPacket)->Clear(sizeof(st_NetHeader));
 				mpACKBlockUpdate(opponetPacket, false, pGameInfo->_DropBlock, pGameInfo->_DropRotate, pGameInfo->_DropX, pGameInfo->_DropY);
+				_pLog._dwPacketPoolUse++;
 
 				if (!SendPacket_UniCast(pGameSession->_SessionIDArr[1 - i], opponetPacket))
 				{
@@ -437,6 +444,7 @@ void TetrisServer::Attack(st_GAMESESSION* pGameSession, int sessionIndex, DWORD 
 		RefCountPointer damagePacket = RefCountPointer::MakeSharedPtr();
 		(*damagePacket)->Clear(sizeof(st_NetHeader));
 		mpACKDamage(damagePacket, opGameInfo->_GarbageLine);
+		_pLog._dwPacketPoolUse++;
 
 		if (!SendPacket_UniCast(pGameSession->_SessionIDArr[1 - sessionIndex], damagePacket))
 		{
@@ -484,6 +492,7 @@ void TetrisServer::Damage(st_GAMESESSION* pGameSession, int sessionIndex)
 		RefCountPointer damagePacket = RefCountPointer::MakeSharedPtr();
 		(*damagePacket)->Clear(sizeof(st_NetHeader));
 		mpACKDamage(damagePacket, pGameInfo->_GarbageLine);
+		_pLog._dwPacketPoolUse++;
 
 		if (!SendPacket_UniCast(pGameSession->_SessionIDArr[sessionIndex], damagePacket))
 		{
@@ -535,6 +544,7 @@ void TetrisServer::UpdateBoard(st_GAMESESSION* pGameSession, int sessionIndex)
 	(*boardUpdatePacket)->Clear(sizeof(st_NetHeader));
 	mpACKBoardUpdate(boardUpdatePacket, pGameInfo->_HoldingBlock, nextBlockBag, (BYTE*)(pGameInfo->_GameBoard),
 		(BYTE*)(opGameInfo->_GameBoard));
+	_pLog._dwPacketPoolUse++;
 
 	if (!SendPacket_UniCast(pGameSession->_SessionIDArr[sessionIndex], boardUpdatePacket))
 	{
@@ -547,6 +557,7 @@ void TetrisServer::UpdateBoard(st_GAMESESSION* pGameSession, int sessionIndex)
 	(*opponentPacket)->Clear(sizeof(st_NetHeader));
 	mpACKBoardUpdate(opponentPacket, opGameInfo->_HoldingBlock, nextBlockBag, (BYTE*)(opGameInfo->_GameBoard),
 		(BYTE*)(pGameInfo->_GameBoard));
+	_pLog._dwPacketPoolUse++;
 
 	if (!SendPacket_UniCast(pGameSession->_SessionIDArr[1 - sessionIndex], opponentPacket))
 	{
@@ -575,6 +586,7 @@ void TetrisServer::CreateBlock(st_GAMESESSION* pGameSession, int sessionIndex)
 	RefCountPointer blockUpdatePacket = RefCountPointer::MakeSharedPtr();
 	(*blockUpdatePacket)->Clear(sizeof(st_NetHeader));
 	mpACKBlockUpdate(blockUpdatePacket, true, nextBlock, 0, pGameInfo->_DropX, pGameInfo->_DropY);
+	_pLog._dwPacketPoolUse++;
 
 	if (!SendPacket_UniCast(pGameSession->_SessionIDArr[sessionIndex], blockUpdatePacket))
 	{
@@ -586,6 +598,7 @@ void TetrisServer::CreateBlock(st_GAMESESSION* pGameSession, int sessionIndex)
 	RefCountPointer opponentBlockPacket = RefCountPointer::MakeSharedPtr();
 	(*opponentBlockPacket)->Clear(sizeof(st_NetHeader));
 	mpACKBlockUpdate(opponentBlockPacket, false, nextBlock, 0, pGameInfo->_DropX, pGameInfo->_DropY);
+	_pLog._dwPacketPoolUse++;
 
 	if (!SendPacket_UniCast(pGameSession->_SessionIDArr[1 - sessionIndex], opponentBlockPacket))
 	{
@@ -601,6 +614,7 @@ void TetrisServer::StartCountDown(st_GAMESESSION* pGameSession)
 	// 둘 다 준비 완료 -> 카운트다운 시작 처리
 	RefCountPointer startCountPacket = RefCountPointer::MakeSharedPtr();
 	(*startCountPacket)->Clear(sizeof(st_NetHeader));
+	_pLog._dwPacketPoolUse++;
 
 	mpACKCountDown(startCountPacket, _wCountDown - 1);
 	MakePacketHeader(startCountPacket);

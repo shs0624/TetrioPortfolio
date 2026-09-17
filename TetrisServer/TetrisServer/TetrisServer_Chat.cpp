@@ -18,6 +18,7 @@ void TetrisServer::EnterChat(st_USER* userPtr)
 	(*chatEnterPacket)->Clear(sizeof(st_NetHeader));
 	mpACKChatEnter(chatEnterPacket, userPtr->AccountNum, userPtr->NickName);
 	MakePacketHeader(chatEnterPacket);
+	_pLog._dwPacketPoolUse++;
 
 	AcquireSRWLockExclusive(&_ChatDataLock);
 	// 자기 자신에게 기존 유저들의 Enter 메세지를 보내야할듯
@@ -26,6 +27,7 @@ void TetrisServer::EnterChat(st_USER* userPtr)
 		RefCountPointer roomUserPacket = RefCountPointer::MakeSharedPtr();
 		(*roomUserPacket)->Clear(sizeof(st_NetHeader));
 		mpACKChatEnter(roomUserPacket, _ChatUserVec[i]->AccountNum, _ChatUserVec[i]->NickName);
+		_pLog._dwPacketPoolUse++;
 
 		if (SendPacket_UniCast(userPtr->ulSessionID, roomUserPacket))
 		{
@@ -65,6 +67,7 @@ void TetrisServer::LeaveChat(ULONGLONG sessionID)
 	{
 		RefCountPointer cPacket = RefCountPointer::MakeSharedPtr();
 		(*cPacket)->Clear(sizeof(st_NetHeader));
+		_pLog._dwPacketPoolUse++;
 
 		st_USER* pExitUser = _ChatUserVec[(*itChat).second];
 
