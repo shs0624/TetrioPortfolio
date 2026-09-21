@@ -2,7 +2,7 @@
 
 //TLSMemoryPoolManager<CPacket> CPacket::_CPacketPool(1000, 5, 10, false, true);
 //procademy::CMemoryPool_LockFree<CPacket> CPacket::_CPacketPool(50000, false, true);
-procademy::CMemoryPool<CPacket> CPacket::_CPacketPool(50000, false, true);
+SHS::CMemoryPool<CPacket> CPacket::_CPacketPool(50000, false, true);
 
 #ifdef LOG_CPACKET
 DWORD CPacket::_iLogFreeIdx;

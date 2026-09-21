@@ -1,21 +1,3 @@
-/*---------------------------------------------------------------
-
-	procademy MemoryPool.
-
-	메모리 풀 클래스 (오브젝트 풀 / 프리리스트)
-	특정 데이타(구조체,클래스,변수)를 일정량 할당 후 나눠쓴다.
-
-	- 사용법.
-
-	procademy::CMemoryPool<DATA> MemPool(300, FALSE);
-	DATA *pData = MemPool.Alloc();
-
-	pData 사용
-
-	MemPool.Free(pData);
-
-
-----------------------------------------------------------------*/
 #pragma once
 #define DEFAULTSIZE_FREELIST_LOCKFREE 500
 //#define LOG_LOCKFREELIST
@@ -28,7 +10,7 @@ enum FreeList_LockFree_LOG
 	FREE_LOCKFREEPOOL
 };
 
-namespace procademy
+namespace SHS
 {
 	template <class DATA>
 	class CMemoryPool_LockFree

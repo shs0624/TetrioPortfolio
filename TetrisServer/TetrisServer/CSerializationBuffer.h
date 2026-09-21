@@ -608,7 +608,7 @@ public:
 	static DWORD _iLogAllocIdx;
 	static LPVOID _allocLog[CPACKET_LOGSIZE];
 #endif
-	static procademy::CMemoryPool<CPacket> _CPacketPool;
+	static SHS::CMemoryPool<CPacket> _CPacketPool;
 	//static procademy::CMemoryPool_LockFree<CPacket> _CPacketPool;
 	//static TLSMemoryPoolManager<CPacket> _CPacketPool;
 	friend class TLSMemoryPoolManager<CPacket>;

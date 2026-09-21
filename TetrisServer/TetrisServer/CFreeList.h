@@ -22,7 +22,7 @@
 #include <new.h>
 #include <Windows.h>
 
-namespace procademy
+namespace SHS
 {
 	template <class DATA>
 	class CMemoryPool

@@ -17,8 +17,8 @@ public:
 			InitializeSRWLock(&_UserMapLock);
 			InitializeSRWLock(&_SessionMapLock);
 
-			_UserPool = new procademy::CMemoryPool_LockFree<st_USER>(maxConnection, false, false);
-			_SessionPool = new procademy::CMemoryPool_LockFree<st_SESSION>(maxConnection, false, false);
+			_UserPool = new SHS::CMemoryPool_LockFree<st_USER>(maxConnection, false, false);
+			_SessionPool = new SHS::CMemoryPool_LockFree<st_SESSION>(maxConnection, false, false);
 
 			_hQuitEvent = CreateEvent(NULL, FALSE, FALSE, NULL);
 			
@@ -130,8 +130,8 @@ private:
 	static unsigned int WINAPI GameTickThread(LPVOID arg);
 	bool inline SleepCheck();
 
-	procademy::CMemoryPool_LockFree<st_USER>* _UserPool;
-	procademy::CMemoryPool_LockFree<st_SESSION>* _SessionPool;	
+	SHS::CMemoryPool_LockFree<st_USER>* _UserPool;
+	SHS::CMemoryPool_LockFree<st_SESSION>* _SessionPool;	
 
 	// AccountNum, 유저 구조체
 	unordered_map<ULONGLONG, st_USER*> _AccountNumUserMap;

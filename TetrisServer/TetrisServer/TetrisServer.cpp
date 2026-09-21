@@ -8,7 +8,7 @@
 #include "TetrisServer.h"
 #include "CConfigReader.h"
 
-procademy::CCrashDump cCrashDump;
+SHS::CCrashDump cCrashDump;
 
 int main()
 {
