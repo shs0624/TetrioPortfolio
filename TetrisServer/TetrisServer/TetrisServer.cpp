@@ -115,7 +115,6 @@ void TetrisServer::OnRelease(ULONGLONG sessionID)
 	{
 		st_USER* pUser = (*itUser).second;
 
-		// @@TODO : 유저가 어떤 서버에 속해있는지 확인 후 제거
 		switch (pUser->enServerState)
 		{
 		case en_SERVER_CHAT:

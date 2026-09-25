@@ -230,8 +230,6 @@ void TetrisServer::UpdatePlay(st_GAMESESSION* pGameSession)
 					ReleaseSRWLockExclusive(&pGameSession->_GameSessionLock);
 					return;
 				}
-
-				// @@TODO : ·Î±×Âï±â
 			}
 
 			pGameInfo->_dwLastDropTime = nowTime;
@@ -605,8 +603,6 @@ void TetrisServer::CreateBlock(st_GAMESESSION* pGameSession, int sessionIndex)
 		EndGameSession(pGameSession, sessionIndex, -1);
 		return;
 	}
-
-	// @@TODO : ·Î±×Âï±â
 }
 
 void TetrisServer::StartCountDown(st_GAMESESSION* pGameSession)

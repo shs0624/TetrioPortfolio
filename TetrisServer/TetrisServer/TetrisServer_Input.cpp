@@ -60,7 +60,6 @@ void TetrisServer::MoveLeft(st_GAMESESSION* pGameSession, int sessionIndex, RefC
 	}
 
 	ReleaseSRWLockExclusive(&pGameSession->_GameSessionLock);
-	// @@TODO : 로그찍기
 }
 
 void TetrisServer::MoveRight(st_GAMESESSION* pGameSession, int sessionIndex, RefCountPointer& cPacket)
@@ -114,8 +113,6 @@ void TetrisServer::MoveRight(st_GAMESESSION* pGameSession, int sessionIndex, Ref
 		ReleaseSRWLockExclusive(&pGameSession->_GameSessionLock);
 		return;
 	}
-
-	// @@TODO : 로그찍기
 
 	ReleaseSRWLockExclusive(&pGameSession->_GameSessionLock);
 }
@@ -175,7 +172,6 @@ void TetrisServer::SoftDrop(st_GAMESESSION* pGameSession, int sessionIndex, RefC
 	}
 
 	ReleaseSRWLockExclusive(&pGameSession->_GameSessionLock);
-	// @@TODO : 로그찍기
 }
 
 // 하드 드랍할 수 있는 가장 낮은 Y값 반환
@@ -320,7 +316,6 @@ void TetrisServer::Rotate(st_GAMESESSION* pGameSession, int sessionIndex, bool c
 			return;
 		}
 
-		// @@TODO : 로그찍기
 		ReleaseSRWLockExclusive(&pGameSession->_GameSessionLock);
 
 		return;
@@ -378,8 +373,6 @@ void TetrisServer::Hold(st_GAMESESSION* pGameSession, int sessionIndex, RefCount
 			ReleaseSRWLockExclusive(&pGameSession->_GameSessionLock);
 			return;
 		}
-
-		// @@TODO : 로그찍기
 
 		// 현재 보드 상태를 전송 (생성예정 큐 보내기 위함)
 		RefCountPointer boardUpdatePacket = RefCountPointer::MakeSharedPtr();
