@@ -33,10 +33,13 @@ public class Client : MonoBehaviour
     // ── Singleton ─────────────────────────────────────────────────────
     public static Client Instance { get; private set; }
 
-    // ── Inspector ─────────────────────────────────────────────────────
-    [Header("Login Server")]
-    public string loginIP   = "127.0.0.1";
-    public int    loginPort = 7777;
+    // ── Login Server (config.txt에서만 채워짐) ─────────────────────────
+    string loginIP;
+    int    loginPort;
+    string _configError;
+
+    /// <summary>config.txt 로드 실패 사유. null이면 정상 로드됨.</summary>
+    public string ConfigError => _configError;
 
     // ── State ─────────────────────────────────────────────────────────
     public enum NetState { Idle, LoginConnecting, LoginReady, GameConnecting, GameReady }
@@ -137,6 +140,17 @@ public class Client : MonoBehaviour
         if (Instance != null && Instance != this) { Destroy(gameObject); return; }
         Instance = this;
         DontDestroyOnLoad(gameObject);
+
+        if (ClientConfig.Load(out _configError))
+        {
+            loginIP   = ClientConfig.LoginServerIP;
+            loginPort = ClientConfig.LoginServerPort;
+            Debug.Log($"[Client] Login server from config: {loginIP}:{loginPort}");
+        }
+        else
+        {
+            Debug.LogError($"[Client] {_configError}");
+        }
     }
 
 
@@ -202,6 +216,12 @@ public class Client : MonoBehaviour
     /// <summary>로그인 서버에 접속만 해둔다. 이후 CheckId/CheckNickname/Register/Login이 이 연결을 재사용한다.</summary>
     public void ConnectToLoginServer(Action onConnected = null, Action<string> onError = null)
     {
+        if (_configError != null)
+        {
+            onError?.Invoke(_configError);
+            return;
+        }
+
         if (State != NetState.Idle)
         {
             Debug.LogWarning("[Client] Already connecting or connected.");
@@ -351,6 +371,9 @@ public class Client : MonoBehaviour
 
         int offset = MIN_LEN;
         string gameIP = ReadFixedUtf16(body, offset, GAME_IP_CHARS);
+        // 0.0.0.0 = 로그인 서버와 같은 호스트. 클라이언트가 실제로 접속한 주소를 그대로 쓴다.
+        if (IPAddress.TryParse(gameIP, out var gameAddr) && gameAddr.Equals(IPAddress.Any))
+            gameIP = loginIP;
         offset += GAME_IP_CHARS * 2;
         ushort gamePort = BitConverter.ToUInt16(body, offset);
         offset += 2;

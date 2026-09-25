@@ -88,6 +88,10 @@ public class LoginSceneManager : MonoBehaviour
         Client.Instance.OnDisconnected        += HandleDisconnected;
 
         ShowLoginPanel();
+
+        // LoginUI.Start()도 같은 ToastPopup을 끄므로, 모든 Start()가 끝난 다음 프레임에 띄운다.
+        if (Client.Instance.ConfigError != null)
+            StartCoroutine(DelayThen(0f, () => toast.Show($"config.txt 오류: {Client.Instance.ConfigError}", 0f)));
     }
 
     void OnDestroy()
