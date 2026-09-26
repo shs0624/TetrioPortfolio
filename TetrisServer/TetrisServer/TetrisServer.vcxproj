@@ -129,6 +129,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="CConfigReader.cpp" />
+    <ClCompile Include="CTextLogger.cpp" />
     <ClCompile Include="CRingBuffer.cpp" />
     <ClCompile Include="CSerializationBuffer.cpp" />
     <ClCompile Include="MatchingManager.cpp" />
@@ -144,6 +145,7 @@
   <ItemGroup>
     <ClInclude Include="..\..\..\..\ProcademyProjects\IOCP_ChatServer_MultiThread\IOCP_ChatServer_MultiThread\DebugLog.h" />
     <ClInclude Include="CConfigReader.h" />
+    <ClInclude Include="CTextLogger.h" />
     <ClInclude Include="CCrashDump.h" />
     <ClInclude Include="CFreeList.h" />
     <ClInclude Include="CFreeList_LockFree.h" />

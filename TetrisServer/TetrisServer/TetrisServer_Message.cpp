@@ -72,6 +72,9 @@ void TetrisServer::MessageProc_Login(ULONGLONG sessionID, RefCountPointer& cPack
 
 		_pLog._dwRedisCertificationFailTotal++;
 		Disconnect(sessionID);
+
+		LogController::GetInstance()->WriteLog("Disconnect_SessionKey Redis Cert Fail - " + to_string(accountNum));
+
 		return;
 	}
 	
@@ -88,6 +91,9 @@ void TetrisServer::MessageProc_Login(ULONGLONG sessionID, RefCountPointer& cPack
 
 		_pLog._dwRedisCertificationFailTotal++;
 		Disconnect(sessionID);
+
+		LogController::GetInstance()->WriteLog("Disconnect_Nickname Redis Cert Fail - " + to_string(accountNum));
+
 		return;
 	}
 
@@ -105,6 +111,8 @@ void TetrisServer::MessageProc_Login(ULONGLONG sessionID, RefCountPointer& cPack
 			_pLog._dwPacketPoolUse--;
 
 		Disconnect(sessionID);
+
+		LogController::GetInstance()->WriteLog("Disconnect_SessionIDUserMap Duplicated - " + to_string(sessionID));
 		return;
 	}
 	else
@@ -120,6 +128,8 @@ void TetrisServer::MessageProc_Login(ULONGLONG sessionID, RefCountPointer& cPack
 
 		_pLog._dwDuplicatedLoginTotal++;
 		Disconnect(_aliveSessionID);
+
+		LogController::GetInstance()->WriteLog("Disconnect_AccountNumUserMap Duplicated - " + to_string(accountNum));
 	}
 	else
 		ReleaseSRWLockExclusive(&_AccountNumUserMapLock);
@@ -151,6 +161,8 @@ void TetrisServer::MessageProc_Login(ULONGLONG sessionID, RefCountPointer& cPack
 	mpRESLogin(cPacket, status);
 	SendPacket_UniCast(sessionID, cPacket);
 	
+	LogController::GetInstance()->WriteLog("LoginSuccess - Nickname : " + WstrToStr(userPtr->NickName) + " | AccountNum : " + to_string(userPtr->AccountNum));
+
 	EnterChat(userPtr);
 
 	_pLog._dwLoginMessageTotal++;
@@ -242,6 +254,9 @@ void TetrisServer::MessageProc_MatchingReq(ULONGLONG sessionID, RefCountPointer&
 			_pLog._dwPacketPoolUse--;
 
 		Disconnect(sessionID);
+
+		LogController::GetInstance()->WriteLog("Disconnect_MatchingREQ_InvalidUser - " + to_string(sessionID));
+
 		return;
 	}
 
@@ -253,6 +268,9 @@ void TetrisServer::MessageProc_MatchingReq(ULONGLONG sessionID, RefCountPointer&
 
 		if (!cPacket.DecRefCount())
 			_pLog._dwPacketPoolUse--;
+
+		LogController::GetInstance()->WriteLog("Disconnect_MatchingREQ_Not Chat State- " + to_string(userPtr->AccountNum));
+
 		return;
 	}
 
@@ -283,6 +301,9 @@ void TetrisServer::MessageProc_MatchingCancelReq(ULONGLONG sessionID, RefCountPo
 			_pLog._dwPacketPoolUse--;
 
 		Disconnect(sessionID);
+
+		LogController::GetInstance()->WriteLog("Disconnect_MatchCancelREQ_InvalidUser - " + to_string(sessionID));
+
 		return;
 	}
 
@@ -294,6 +315,9 @@ void TetrisServer::MessageProc_MatchingCancelReq(ULONGLONG sessionID, RefCountPo
 
 		if (!cPacket.DecRefCount())
 			_pLog._dwPacketPoolUse--;
+
+		LogController::GetInstance()->WriteLog("Disconnect_NotMatchingState - " + to_string(userPtr->AccountNum));
+
 		return;
 	}
 

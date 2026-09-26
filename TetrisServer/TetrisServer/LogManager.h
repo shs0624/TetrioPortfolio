@@ -1,6 +1,7 @@
 #pragma once
 //#include "PDHMonitor.h"
 #include "Includes.h"
+#include "CTextLogger.h"
 //#include "CPUUsage.h"
 //#include "LanClient.h"
 //#include "MonitorProtocol.h"
@@ -54,6 +55,12 @@ public:
 	{
 		static LogController logC;
 		return &logC;
+	}
+
+	void WriteLog(const std::string& message)
+	{
+		_pCTextLogger->Write(message);
+		_pCTextLogger->Close();
 	}
 
 	// 외부의 스레드 저장소를
@@ -166,6 +173,8 @@ private:
 		_pMonitorClient->InitMonitorClient();
 #endif
 
+		_pCTextLogger = new CTextLogger("TetrisServerLog.txt");
+
 		_hLogUpdateEvent = CreateEvent(NULL, FALSE, FALSE, NULL);
 		_htpsThreadHandle = (HANDLE)_beginthreadex(NULL, 0, LogingThread, this, 0, &_tpsThreadID);
 		if (_htpsThreadHandle == NULL)
@@ -240,6 +249,9 @@ private:
 	PDHMonitor* _pPDHMonitor;
 	MonitorClient* _pMonitorClient;
 #endif
+
+
+	CTextLogger* _pCTextLogger;
 
 	stServerLog _stPrintLog;
 
