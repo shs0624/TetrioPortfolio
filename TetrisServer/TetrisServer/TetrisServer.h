@@ -14,8 +14,10 @@ public:
 		{
 			StartNetServer(ip, port, bNagleEnabled, maxConnection, _ProgramKey, _FixedKey);
 
+			InitializeSRWLock(&_AccountNumUserMapLock);
 			InitializeSRWLock(&_UserMapLock);
 			InitializeSRWLock(&_SessionMapLock);
+			InitializeSRWLock(&_ChatDataLock);
 
 			_UserPool = new SHS::CMemoryPool_LockFree<st_USER>(maxConnection, false, false);
 			_SessionPool = new SHS::CMemoryPool_LockFree<st_SESSION>(maxConnection, false, false);

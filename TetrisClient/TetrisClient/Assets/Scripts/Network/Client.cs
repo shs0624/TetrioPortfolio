@@ -44,7 +44,7 @@ public class Client : MonoBehaviour
     // ── State ─────────────────────────────────────────────────────────
     public enum NetState { Idle, LoginConnecting, LoginReady, GameConnecting, GameReady }
     public NetState State { get; private set; } = NetState.Idle;
-    public bool IsConnected => _socket != null && _socket.Connected;
+    public bool IsConnected => _conn != null && !_conn.Closed && _conn.Socket.Connected;
     /// <summary>로그인 서버에서 로그인 성공 시 받은 내 AccountNum. 로비 유저 목록에서 "나"를 구분하는 데 쓴다.</summary>
     public long MyAccountNum => _accountNum;
     /// <summary>내 닉네임. 게임서버 로그인 직후 서버가 보내는 자기 자신의 ACK_CHAT_ENTER에서 기억해둔다.</summary>
@@ -63,16 +63,25 @@ public class Client : MonoBehaviour
     const int LOGIN_SESSIONKEY_CHARS  = 64;  // 로그인서버가 보내는 WCHAR SessionKey[64] (문자 수)
     const int GAME_IP_CHARS           = 16;  // WCHAR GameIP[16] (문자 수)
 
-    // ── Socket & Buffers ──────────────────────────────────────────────
-    Socket _socket;
-    readonly byte[] _recvBuf    = new byte[1024 * 8];
-    readonly byte[] _pendingBuf = new byte[1024 * 16];
-    int _pendingSize;
+    // ── Connection ────────────────────────────────────────────────────
+    // 연결마다 소켓/버퍼/송신 상태를 따로 갖고, 모든 비동기 콜백은 AsyncState로 받은 자기 연결만 다룬다.
+    // 로그인 서버 → 게임 서버로 교체되면 이전 연결은 Closed가 되어 늦게 도착한 콜백이 전부 무시된다.
+    sealed class Connection
+    {
+        public readonly Socket Socket;
+        public readonly byte[] RecvBuf    = new byte[1024 * 8];
+        public readonly byte[] PendingBuf = new byte[1024 * 16];
+        public int  PendingSize;                                   // 이 연결의 수신 체인에서만 접근
+        public readonly ConcurrentQueue<byte[]> SendQueue = new ConcurrentQueue<byte[]>();
+        public readonly object SendLock = new object();
+        public bool IsSending;                                     // SendLock 안에서만 접근
+        public volatile bool Closed;
 
-    // ── Send queue (non-blocking) ─────────────────────────────────────
-    readonly ConcurrentQueue<byte[]> _sendQueue = new ConcurrentQueue<byte[]>();
-    bool _isSending;
-    readonly object _sendLock = new object();
+        public Connection(Socket socket) { Socket = socket; }
+    }
+
+    // 메인 스레드에서만 교체한다. 스레드풀 콜백은 이 필드가 아니라 자기 Connection만 사용한다.
+    Connection _conn;
 
     // ── Main-thread dispatcher ────────────────────────────────────────
     readonly ConcurrentQueue<Action> _mainQueue = new ConcurrentQueue<Action>();
@@ -229,36 +238,77 @@ public class Client : MonoBehaviour
         }
 
         State = NetState.LoginConnecting;
-        _socket = NewSocket();
+        var conn = OpenConnection();
         Debug.Log($"[Client] Connecting to login server {loginIP}:{loginPort}...");
 
         try
         {
             var ep = new IPEndPoint(IPAddress.Parse(loginIP), loginPort);
-            _socket.BeginConnect(ep, ar =>
+            conn.Socket.BeginConnect(ep, ar =>
             {
-                try
+                string error = CompleteConnect(conn, ar);
+                if (error != null)
                 {
-                    _socket.EndConnect(ar);
+                    _mainQueue.Enqueue(() =>
+                    {
+                        if (conn != _conn) return;
+                        CloseConnection();
+                        State = NetState.Idle;
+                        onError?.Invoke(error);
+                    });
+                    return;
+                }
+
+                _mainQueue.Enqueue(() =>
+                {
+                    if (conn != _conn) return;
                     State = NetState.LoginReady;
-                // TODO: 서버 Protocol.h에 TETRISLOGIN_REQ_HEARTBEAT(19) 추가 후 아래 주석 해제
-                    _mainQueue.Enqueue(StartLoginHeartbeat);
-                    StartReceive();
+                    StartLoginHeartbeat();
                     Debug.Log("[Client] Login server connected.");
-                    _mainQueue.Enqueue(() => onConnected?.Invoke());
-                }
-                catch (Exception e)
-                {
-                    State = NetState.Idle;
-                    _mainQueue.Enqueue(() => onError?.Invoke(e.Message));
-                }
+                    onConnected?.Invoke();
+                });
+                StartReceive(conn);
             }, null);
         }
         catch (Exception e)
         {
+            CloseConnection();
             State = NetState.Idle;
             onError?.Invoke(e.Message);
         }
+    }
+
+    // 스레드풀(연결 완료 콜백)에서 호출. 성공하면 null, 실패하면 사유를 돌려준다.
+    // 연결 완료 처리(메인 큐)를 먼저 넣고 수신을 시작하므로, 첫 패킷보다 연결 완료 처리가 항상 먼저 실행된다.
+    static string CompleteConnect(Connection conn, IAsyncResult ar)
+    {
+        try
+        {
+            conn.Socket.EndConnect(ar);
+            return conn.Closed ? "연결이 이미 닫혔습니다." : null;
+        }
+        catch (Exception e)
+        {
+            return e.Message;
+        }
+    }
+
+    Connection OpenConnection()
+    {
+        _conn = new Connection(NewSocket());
+        return _conn;
+    }
+
+    // 메인 스레드 전용. 현재 연결을 닫고 비운다. 닫힌 연결에 남아있는 비동기 콜백은 Closed를 보고 스스로 끝난다.
+    void CloseConnection()
+    {
+        var conn = _conn;
+        if (conn == null) return;
+        _conn = null;
+
+        conn.Closed = true;
+        try { conn.Socket.Shutdown(SocketShutdown.Both); } catch { }
+        try { conn.Socket.Close(); }                      catch { }
     }
 
     // ════════════════════════════════════════════════════════════════════
@@ -394,44 +444,43 @@ public class Client : MonoBehaviour
         // 확실히 멈춰서 이중으로 막는다.
         StopHeartbeat();
         State = NetState.GameConnecting;
-        CloseSocket();
-        _pendingSize = 0;
+        CloseConnection();
         BeginConnectToGame(gameIP, gamePort);
     }
 
     void BeginConnectToGame(string ip, int port)
     {
-        // 로그인 서버 소켓을 명시적으로 닫은 후 신규 소켓으로 교체한다.
-        // Close하지 않으면 기존 BeginReceive 콜백이 FIN을 받아
-        // DispatchError를 트리거하고 _pendingLoginCb가 소멸되어 씨 전환이 되지 않는다.
-        var oldSocket = _socket;
-        try { oldSocket?.Shutdown(SocketShutdown.Both); } catch { }
-        try { oldSocket?.Close(); }                      catch { }
-        _socket = NewSocket();
+        // 로그인 서버 연결은 이미 닫혔고(Closed), 그 연결의 늦은 콜백(FIN 등)은 스스로 무시된다.
+        var conn = OpenConnection();
         Debug.Log($"[Client] Connecting to game server {ip}:{port}...");
 
         try
         {
             var ep = new IPEndPoint(IPAddress.Parse(ip), port);
-            _socket.BeginConnect(ep, ar =>
+            conn.Socket.BeginConnect(ep, ar =>
             {
-                try
+                string error = CompleteConnect(conn, ar);
+                if (error != null)
                 {
-                    _socket.EndConnect(ar);
-                    StartReceive();
+                    _mainQueue.Enqueue(() =>
+                    {
+                        if (conn != _conn) return;
+                        FailLogin("게임 서버 접속 실패: " + error);
+                    });
+                    return;
+                }
+
+                _mainQueue.Enqueue(() =>
+                {
+                    if (conn != _conn) return;
                     Debug.Log("[Client] Game server connected. Sending TETRIS_REQ_LOGIN...");
-                    _mainQueue.Enqueue(SendGameLoginReq);
-                }
-                catch (Exception e)
-                {
-                    State = NetState.Idle;
-                    FailLogin("게임 서버 접속 실패: " + e.Message);
-                }
+                    SendGameLoginReq();
+                });
+                StartReceive(conn);
             }, null);
         }
         catch (Exception e)
         {
-            State = NetState.Idle;
             FailLogin("게임 서버 접속 예외: " + e.Message);
         }
     }
@@ -453,13 +502,12 @@ public class Client : MonoBehaviour
 
         if (!ok)
         {
-            State = NetState.Idle;
             FailLogin("게임 서버 로그인 실패");
             return;
         }
 
-            State = NetState.GameReady;
-            StartHeartbeat(); // 연결 성공 시 하트비트 코루틴 시작
+        State = NetState.GameReady;
+        StartHeartbeat(); // 연결 성공 시 하트비트 코루틴 시작
         Debug.Log("[Client] Game server login OK!");
 
         var cb = _pendingLoginCb;
@@ -468,12 +516,14 @@ public class Client : MonoBehaviour
         OnGameServerConnected?.Invoke();
     }
 
+    // 메인 스레드 전용.
     void FailLogin(string reason)
     {
         Debug.LogWarning("[Client] Login failed: " + reason);
         var cb = _pendingLoginCb;
         _pendingLoginCb = null;
-        CloseSocket();
+        StopHeartbeat();
+        CloseConnection();
         State = NetState.Idle;
         cb?.Invoke(false, reason);
     }
@@ -804,7 +854,7 @@ public class Client : MonoBehaviour
         // 진단: Disconnect 호출 시 호출 주체 출력 (마치면 제거)
         Debug.LogWarning("[Client] Disconnect() called.\n" + System.Environment.StackTrace);
         StopHeartbeat(); // 디스콜 시 하트비트 중지
-        CloseSocket();
+        CloseConnection();
         State = NetState.Idle;
         _chatRoster.Clear(); // 재로그인 시 유령(stale) 유저가 남지 않도록 초기화
         Debug.Log("[Client] Disconnected.");
@@ -822,98 +872,92 @@ public class Client : MonoBehaviour
     // ── ASYNC RECEIVE ─────────────────────────────────────────────────
     // ════════════════════════════════════════════════════════════════════
 
-    void StartReceive()
+    // 연결당 수신은 항상 하나만 걸린다: 연결 완료 시 1회, 이후 OnReceive 끝에서 같은 연결에만 재등록.
+    void StartReceive(Connection conn)
     {
-        if (_socket == null || !_socket.Connected) return;
+        if (conn.Closed) return;
         try
         {
-            _socket.BeginReceive(_recvBuf, 0, _recvBuf.Length, SocketFlags.None, OnReceive, null);
+            conn.Socket.BeginReceive(conn.RecvBuf, 0, conn.RecvBuf.Length, SocketFlags.None, OnReceive, conn);
         }
         catch (Exception e)
         {
-            DispatchError("BeginReceive failed: " + e.Message);
+            ReportError(conn, "BeginReceive failed: " + e.Message);
         }
     }
 
     void OnReceive(IAsyncResult ar)
     {
-        // 진입 시 _socket을 로친에 캐쳓한다.
-        // ParsePackets 도중 BeginConnectToGame이 _socket을 게임 서버용으로 교체해도
-        // 이 콜백의 남은 실행은 직접 로그인 서버 소켓(sock)을 사용한다.
-        var sock = _socket;
-        if (sock == null) return;
+        var conn = (Connection)ar.AsyncState;
+        int received;
         try
         {
-            int received = sock.EndReceive(ar);   // _socket이 아닌 콗 소켓으로 EndReceive
-            if (received == 0)
-            {
-                // 게임 서버 전환 중 로그인 서버가 FIN을 보내는 것은 정상 동작
-                // 소켓이 이미 교체된 경우 조용히 무시한다
-                if (ReferenceEquals(sock, _socket))
-                    DispatchError("Server closed the connection.");
-                return;
-            }
-            if (_pendingSize + received > _pendingBuf.Length)
-            {
-                DispatchError("Receive buffer overflow.");
-                return;
-            }
-            Buffer.BlockCopy(_recvBuf, 0, _pendingBuf, _pendingSize, received);
-            _pendingSize += received;
-            ParsePackets();
-            // _socket이 교체된 경우(= 게임 서버 전환) StartReceive는 OnConnected에서 호용하므로 여기서는 제외
-            if (ReferenceEquals(sock, _socket))
-                StartReceive();
+            received = conn.Socket.EndReceive(ar);
         }
-        catch (ObjectDisposedException) { /* 소켓 닫힘, 무시 */ }
-        catch (SocketException se) when (
-            se.SocketErrorCode == SocketError.OperationAborted ||
-            se.SocketErrorCode == SocketError.Interrupted      ||
-            se.SocketErrorCode == SocketError.ConnectionReset)
-        { /* 소켓 강제 닫힘으로 인한 정상적인 종료, 무시 */ }
         catch (Exception e)
         {
-            if (ReferenceEquals(sock, _socket))
-                DispatchError("OnReceive error: " + e.Message);
+            // 닫힌(교체된) 연결이면 ReportError가 조용히 무시한다. 현재 연결의 오류(ConnectionReset 등)는 끊김으로 알린다.
+            ReportError(conn, "OnReceive error: " + e.Message);
+            return;
         }
+
+        if (conn.Closed) return; // 게임 서버 전환 중 로그인 서버가 보낸 FIN/잔여 데이터 등
+
+        if (received == 0)
+        {
+            ReportError(conn, "Server closed the connection.");
+            return;
+        }
+        if (conn.PendingSize + received > conn.PendingBuf.Length)
+        {
+            ReportError(conn, "Receive buffer overflow.");
+            return;
+        }
+
+        Buffer.BlockCopy(conn.RecvBuf, 0, conn.PendingBuf, conn.PendingSize, received);
+        conn.PendingSize += received;
+
+        if (ParsePackets(conn))
+            StartReceive(conn);
     }
 
-    
     // 헤더: [FixedKey(1)][shLen(2,LE)][RandKey(1)][CheckSum(1, 암호화됨)] + payload(shLen, 암호화됨)
-    void ParsePackets()
+    // 패킷 오류로 연결을 끊어야 하면 false.
+    bool ParsePackets(Connection conn)
     {
+        byte[] buf = conn.PendingBuf;
         int consumed = 0;
-        while (consumed + HEADER_SIZE <= _pendingSize)
+        while (consumed + HEADER_SIZE <= conn.PendingSize)
         {
-            int shLen = _pendingBuf[consumed + 1] | (_pendingBuf[consumed + 2] << 8);
+            int shLen = buf[consumed + 1] | (buf[consumed + 2] << 8);
             if (shLen < 0 || shLen > PROTOCOL_MAX_SIZE)
             {
-                DispatchError("비정상 패킷 크기: " + shLen);
-                return;
+                ReportError(conn, "비정상 패킷 크기: " + shLen);
+                return false;
             }
 
             int totalLen = HEADER_SIZE + shLen;
-            if (consumed + totalLen > _pendingSize) break; // 더 받아야 함
+            if (consumed + totalLen > conn.PendingSize) break; // 더 받아야 함
 
-            byte randKey = _pendingBuf[consumed + 3];
+            byte randKey = buf[consumed + 3];
 
             // CheckSum(1) + payload(shLen) 구간을 복사해서 복호화 (원본 버퍼 훼손 방지)
             var region = new byte[1 + shLen];
-            Buffer.BlockCopy(_pendingBuf, consumed + 4, region, 0, region.Length);
+            Buffer.BlockCopy(buf, consumed + 4, region, 0, region.Length);
             DecodeInPlace(region, FIXED_KEY, randKey);
 
             byte decodedChecksum = region[0];
             byte expected = ComputeChecksum(region, 1, shLen);
             if (decodedChecksum != expected)
             {
-                DispatchError("체크섬 불일치 (패킷 손상 또는 암호화 키 불일치)");
-                return;
+                ReportError(conn, "체크섬 불일치 (패킷 손상 또는 암호화 키 불일치)");
+                return false;
             }
 
             if (shLen < 2)
             {
-                DispatchError("패킷이 PacketID를 담기에 너무 작습니다.");
-                return;
+                ReportError(conn, "패킷이 PacketID를 담기에 너무 작습니다.");
+                return false;
             }
 
             ushort packetType = (ushort)(region[1] | (region[2] << 8));
@@ -921,14 +965,16 @@ public class Client : MonoBehaviour
             var body = new byte[bodyLen];
             if (bodyLen > 0) Buffer.BlockCopy(region, 3, body, 0, bodyLen);
 
-            _mainQueue.Enqueue(() => Dispatch(packetType, body));
+            // 연결이 교체된 뒤 실행되면 이전 연결의 패킷이므로 버린다.
+            _mainQueue.Enqueue(() => { if (conn == _conn) Dispatch(packetType, body); });
 
             consumed += totalLen;
         }
 
-        if (consumed > 0 && consumed < _pendingSize)
-            Buffer.BlockCopy(_pendingBuf, consumed, _pendingBuf, 0, _pendingSize - consumed);
-        _pendingSize = Math.Max(0, _pendingSize - consumed);
+        if (consumed > 0 && consumed < conn.PendingSize)
+            Buffer.BlockCopy(buf, consumed, buf, 0, conn.PendingSize - consumed);
+        conn.PendingSize = Math.Max(0, conn.PendingSize - consumed);
+        return true;
     }
 
     void Dispatch(ushort packetID, byte[] body)
@@ -1015,9 +1061,11 @@ public class Client : MonoBehaviour
     // ── ASYNC SEND ────────────────────────────────────────────────────
     // ════════════════════════════════════════════════════════════════════
 
+    // 메인 스레드에서 호출. 패킷은 현재 연결의 큐에만 들어가므로 이전 연결용 패킷이 새 연결로 나가지 않는다.
     void SendToServer(ushort packetType, byte[] body)
     {
-        if (!IsConnected)
+        var conn = _conn;
+        if (conn == null || conn.Closed || !conn.Socket.Connected)
         {
             Debug.LogWarning("[Client] SendToServer called but not connected.");
             return;
@@ -1028,62 +1076,49 @@ public class Client : MonoBehaviour
         payload[1] = (byte)((packetType >> 8) & 0xFF);
         Buffer.BlockCopy(body, 0, payload, 2, body.Length);
 
-        var packet = BuildEncodedPacket(payload);
-        _sendQueue.Enqueue(packet);
-        lock (_sendLock) { if (!_isSending) SendNext(); }
+        conn.SendQueue.Enqueue(BuildEncodedPacket(payload));
+        lock (conn.SendLock) { if (!conn.IsSending) SendNext(conn); }
     }
 
-    void SendNext()
+    // 반드시 conn.SendLock 안에서 호출.
+    void SendNext(Connection conn)
     {
-        if (!_sendQueue.TryDequeue(out byte[] data)) return;
-        _isSending = true;
+        if (conn.Closed || !conn.SendQueue.TryDequeue(out byte[] data))
+        {
+            conn.IsSending = false;
+            return;
+        }
+
+        conn.IsSending = true;
         try
         {
             // 진단: 송신 직전 소켓 상태 확인 (마치면 제거)
-            Debug.Log($"[Client] BeginSend: socket.Connected={_socket?.Connected}, State={State}, bytes={data.Length}");
-            _socket.BeginSend(data, 0, data.Length, SocketFlags.None, OnSent, null);
+            Debug.Log($"[Client] BeginSend: socket.Connected={conn.Socket.Connected}, State={State}, bytes={data.Length}");
+            conn.Socket.BeginSend(data, 0, data.Length, SocketFlags.None, OnSent, conn);
         }
         catch (Exception e)
         {
-            _isSending = false;
-            DispatchError("BeginSend failed: " + e.Message);
+            conn.IsSending = false;
+            ReportError(conn, "BeginSend failed: " + e.Message);
         }
     }
 
     void OnSent(IAsyncResult ar)
     {
-        try { _socket.EndSend(ar); }
-        catch (ObjectDisposedException)
+        var conn = (Connection)ar.AsyncState;
+        try
         {
-            // 소켓 닫힘 후 남은 콜백, 무시
-            lock (_sendLock) { _isSending = false; }
-            return;
-        }
-        catch (SocketException se) when (
-            se.SocketErrorCode == SocketError.ConnectionAborted ||
-            se.SocketErrorCode == SocketError.ConnectionReset   ||
-            se.SocketErrorCode == SocketError.OperationAborted  ||
-            se.SocketErrorCode == SocketError.Interrupted)
-        {
-            // 연결 종료로 인한 송신 실패 — 플래그만 정리하고 추가 시도 안 함
-            lock (_sendLock) { _isSending = false; }
-            return;
+            conn.Socket.EndSend(ar);
         }
         catch (Exception e)
         {
-            // 예상치 못한 오류 — DispatchError로 연결 정리
-            lock (_sendLock) { _isSending = false; }
-            DispatchError("OnSent error: " + e.Message);
+            lock (conn.SendLock) { conn.IsSending = false; }
+            // 닫힌 연결이면 무시된다. 현재 연결이면 수신 쪽 FIN과 별개로 여기서도 끊김을 알린다(중복 보고는 메인에서 한 번만 처리됨).
+            ReportError(conn, "OnSent error: " + e.Message);
             return;
         }
-        finally
-        {
-            lock (_sendLock)
-            {
-                if (_sendQueue.IsEmpty) _isSending = false;
-                else                    SendNext();
-            }
-        }
+
+        lock (conn.SendLock) { SendNext(conn); }
     }
 
     // ════════════════════════════════════════════════════════════════════
@@ -1192,39 +1227,35 @@ public class Client : MonoBehaviour
         return s;
     }
 
-    void CloseSocket()
+    // 어느 스레드에서든 호출 가능. 닫힌(교체된) 연결의 오류는 무시하고, 현재 연결의 오류만 메인 스레드로 넘긴다.
+    void ReportError(Connection conn, string msg)
     {
-        if (_socket == null) return;
-        try { _socket.Shutdown(SocketShutdown.Both); } catch { }
-        try { _socket.Close(); }                      catch { }
-        _socket    = null;
-        _isSending = false;
+        if (conn.Closed) return;
+        _mainQueue.Enqueue(() => HandleConnectionError(conn, msg));
     }
 
-    void DispatchError(string msg)
+    // 메인 스레드 전용. 같은 연결에서 오류가 여러 번 보고돼도 첫 번째만 처리된다(처리 후 _conn이 비워지므로).
+    void HandleConnectionError(Connection conn, string msg)
     {
-        // 이미 정리된 상태면 재진입 방지 (소켓 닫힘 직후 다른 콜백이 다시 화재되는 코너 케이스)
-        if (State == NetState.Idle) return;
+        if (conn != _conn || State == NetState.Idle) return;
         Debug.LogError("[Client] " + msg);
 
         // 진행 중이던 요청이 있으면 매달린 채로 두지 말고 실패로 정리한다.
         var loginCb = _pendingLoginCb;
-        _pendingLoginCb = null; 
+        _pendingLoginCb = null;
         var dupCb = _pendingDupCheckCb;
         _pendingDupCheckCb = null;
         _pendingDupCheckKind = DupCheckKind.None;
         var regCb = _pendingRegisterCb;
         _pendingRegisterCb = null;
 
-        CloseSocket();
+        StopHeartbeat();
+        CloseConnection();
         State = NetState.Idle;
 
-        _mainQueue.Enqueue(() =>
-        {
-            loginCb?.Invoke(false, msg);
-            dupCb?.Invoke(false);
-            regCb?.Invoke(false);
-            OnDisconnected?.Invoke(msg);
-        });
+        loginCb?.Invoke(false, msg);
+        dupCb?.Invoke(false);
+        regCb?.Invoke(false);
+        OnDisconnected?.Invoke(msg);
     }
 }
