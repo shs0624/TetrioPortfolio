@@ -373,6 +373,8 @@ void TetrisServer::MessageProc_GameReadyReq(ULONGLONG sessionID, RefCountPointer
 
 	SendPacket_UniCast(sessionID, cPacket);
 
+	_pLog._dwGameUserCount++;
+
 	// 0번이면 0b01, 1번이면 0b10
 	LONG myBit = 1 << userPtr->byGameSessionIndex;  
 	LONG prevMask = InterlockedOr((LONG*)&userPtr->pGameSession->_lReady, myBit);

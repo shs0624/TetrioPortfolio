@@ -122,6 +122,7 @@ void TetrisServer::OnRelease(ULONGLONG sessionID)
 			break;
 		case en_SERVER_MATCHING:
 			pMatchManager->Dequeue(pUser);
+			LeaveChat(sessionID);
 			break;
 		case en_SERVER_GAME:
 			// 카운트 다운 전 상태라면 조치가 필요함
