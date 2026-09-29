@@ -28,6 +28,11 @@ public class CountdownUI : MonoBehaviour
     CanvasGroup     _textGroup;
     TextMeshProUGUI _text;
 
+    Action _onComplete;
+
+    /// <summary>연출이 진행 중이면 true. 완료되거나 Skip()되면 false.</summary>
+    public bool IsPlaying { get; private set; }
+
     void Awake()
     {
         BuildUI();
@@ -93,10 +98,35 @@ public class CountdownUI : MonoBehaviour
     public void PlayCountdown(int seconds, Action onComplete = null)
     {
         StopAllCoroutines();
-        StartCoroutine(CoPlayCountdown(seconds, onComplete));
+        _onComplete = onComplete;
+        IsPlaying   = true;
+        StartCoroutine(CoPlayCountdown(seconds));
     }
 
-    IEnumerator CoPlayCountdown(int seconds, Action onComplete)
+    /// <summary>
+    /// 연출 도중 서버가 먼저 게임을 시작했을 때 호출한다. onComplete를 즉시 호출하고,
+    /// 화면에 남은 숫자/마스킹은 짧게 페이드 아웃한다. 연출 중이 아니면 아무것도 하지 않는다.
+    /// </summary>
+    public void Skip()
+    {
+        if (!IsPlaying) return;
+
+        StopAllCoroutines();
+        Complete();
+        StartCoroutine(CoFadeBoth(MASK_FADE_OUT));
+    }
+
+    void Complete()
+    {
+        if (!IsPlaying) return;
+
+        IsPlaying = false;
+        var cb = _onComplete;
+        _onComplete = null;
+        cb?.Invoke();
+    }
+
+    IEnumerator CoPlayCountdown(int seconds)
     {
         yield return CoFade(_maskGroup, 0f, MASK_ALPHA, NUMBER_FADE_IN);
 
@@ -117,7 +147,7 @@ public class CountdownUI : MonoBehaviour
         // START! 텍스트와 마스킹을 함께 걷어낸다.
         yield return CoFadeBoth(MASK_FADE_OUT);
 
-        onComplete?.Invoke();
+        Complete();
     }
 
     IEnumerator CoFade(CanvasGroup group, float from, float to, float duration)

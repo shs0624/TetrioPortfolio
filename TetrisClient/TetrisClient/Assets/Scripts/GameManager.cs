@@ -46,7 +46,7 @@ public class GameManager : MonoBehaviour
 
     // ── Countdown ────────────────────────────────────────────────────────────
     private CountdownUI _countdownUI;
-    private bool        _countdownFinished; // 카운트다운이 끝나기 전에는 입력을 보내지 않는다.
+    private bool        _countdownFinished; // 카운트다운 연출이 끝나거나, 그 전에 게임 패킷이 도착하면 true. 그 전에는 입력을 보내지 않는다.
 
     // ── Damage meter ─────────────────────────────────────────────────────────
     private DamageMeterUI _damageMeter;
@@ -218,6 +218,7 @@ public class GameManager : MonoBehaviour
     /// <summary>Client.OnBoardUpdate 콜백. 내 보드/홀드 표시와 상대 보드 미리보기를 갱신한다.</summary>
     private void OnServerBoardUpdate(TetBlockType holdingBlock, TetBlockType[] nextBag, byte[] myBoard, byte[] opponentBoard)
     {
+        EndCountdownByServer();
         board.ApplyServerBoard(myBoard);
         piece.RefreshGhost(); // 보드가 바뀌었으니 착지 예측도 다시 계산 (BlockUpdate로도 갱신되지만 이중 안전장치)
 
@@ -232,6 +233,7 @@ public class GameManager : MonoBehaviour
     /// isSelf면 내 piece에, 아니면 상대 보드 미리보기(OpponentBoardUI)에 반영한다.</summary>
     private void OnServerBlockUpdate(bool isSelf, TetBlockType blockType, byte rotate, sbyte x, sbyte y)
     {
+        EndCountdownByServer();
         if (isSelf)
             piece.ApplyServerState(board, blockType, rotate, x, y);
         else
@@ -239,7 +241,11 @@ public class GameManager : MonoBehaviour
     }
 
     /// <summary>Client.OnDamageUpdate 콜백. 대기 중인 가비지 미터를 갱신한다.</summary>
-    private void OnServerDamageUpdate(int count) => _damageMeter.SetCount(count);
+    private void OnServerDamageUpdate(int count)
+    {
+        EndCountdownByServer();
+        _damageMeter.SetCount(count);
+    }
 
     public void OnServerGameOver() { _gameOver = true; }
 
@@ -247,6 +253,7 @@ public class GameManager : MonoBehaviour
     private void OnServerGameResult(bool isWin)
     {
         Debug.Log($"[GameManager] GAME_RESULT 수신. isWin={isWin}");
+        EndCountdownByServer();
         _gameOver = true;
         _gameResultUI.Show(isWin);
     }
@@ -262,7 +269,8 @@ public class GameManager : MonoBehaviour
 
     /// <summary>
     /// Client.OnCountdown 콜백. ACK_COUNTDOWN(seconds) 수신 시 카운트다운 연출을 재생한다.
-    /// 연출이 끝나면 서버가 보내는 보드/블록 갱신 패킷을 기다리는 상태가 된다.
+    /// 연출이 끝나면 입력 전송 가능 상태가 된다. 연출이 끝나기 전에 게임 패킷이 먼저 오면
+    /// EndCountdownByServer()가 연출을 조기 종료한다.
     /// </summary>
     private void OnServerCountdown(int seconds)
     {
@@ -273,5 +281,18 @@ public class GameManager : MonoBehaviour
             _countdownFinished = true;
             Debug.Log("[GameManager] 카운트다운 종료. 입력 전송 가능 상태로 전환.");
         });
+    }
+
+    /// <summary>
+    /// 게임 패킷 수신 시 호출. 서버가 이미 게임을 시작했으므로, 카운트다운 연출이 남아 있으면
+    /// 그 자리에서 끝내고 입력을 허용한다. 이미 끝났으면 아무것도 하지 않는다.
+    /// </summary>
+    private void EndCountdownByServer()
+    {
+        if (_countdownFinished) return;
+
+        Debug.Log("[GameManager] 카운트다운 중 게임 패킷 수신 → 카운트다운 조기 종료.");
+        _countdownUI.Skip();       // 연출 중이면 onComplete가 즉시 호출되어 _countdownFinished = true
+        _countdownFinished = true; // 연출 중이 아니었던 경우 대비
     }
 }
