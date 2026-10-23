@@ -135,17 +135,13 @@ void TetrisServer::MessageProc_Login(ULONGLONG sessionID, RefCountPointer& cPack
 		ReleaseSRWLockExclusive(&_AccountNumUserMapLock);
 
 	st_USER* userPtr = _UserPool->Alloc();
-
 	_pLog._dwPlayerPoolUse++;
 
 	userPtr->ulSessionID = sessionID;
 	userPtr->AccountNum = accountNum;
-	userPtr->dwLastRecvTime = timeGetTime();
-	userPtr->bBatched = FALSE;
 	userPtr->pGameSession = NULL;
 	userPtr->enServerState = None;
 	memcpy_s(userPtr->SessionKey, sizeof(userPtr->SessionKey), tempSessionKey, sizeof(tempSessionKey));
-	//wcsncpy_s(userPtr->ID, tempID, sizeof(WCHAR) * 20);
 	wcsncpy_s(userPtr->NickName, Nickname, _TRUNCATE);
 
 	AcquireSRWLockExclusive(&_UserMapLock);
@@ -155,6 +151,8 @@ void TetrisServer::MessageProc_Login(ULONGLONG sessionID, RefCountPointer& cPack
 	AcquireSRWLockExclusive(&_AccountNumUserMapLock);
 	_AccountNumUserMap[userPtr->AccountNum] = userPtr;
 	ReleaseSRWLockExclusive(&_AccountNumUserMapLock);
+
+	SetTimeoutMs(sessionID, _dwTimeoutUser);
 
 	// 로그인 성공 RES 보내기
 	(*cPacket)->Clear(sizeof(st_NetHeader));

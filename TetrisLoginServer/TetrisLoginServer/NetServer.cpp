@@ -334,14 +334,12 @@ unsigned int WINAPI CNetServer::TimerThread(LPVOID arg)
 
 	LogController::GetInstance()->RegisterLogStruct(&_pLog);
 
-	HANDLE hHandleArr[2] = { thisPtr->_hQuitEvent, thisPtr->_hTimeoutEvent };
-
 	DWORD ret = 0;
 	while (1)
 	{
 		thisPtr->TimeCheck(_sSleepTime);
 
-		ret = WaitForMultipleObjects(2, hHandleArr, FALSE, _sSleepTime);
+		ret = WaitForSingleObject(thisPtr->_hQuitEvent, _sSleepTime);
 		if (ret == WAIT_OBJECT_0)
 		{
 			return 0;
@@ -395,7 +393,6 @@ bool CNetServer::Init(int maxConnection)
 	GetSystemInfo(&si);
 
 	_hQuitEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
-	_hTimeoutEvent = CreateEvent(NULL, FALSE, TRUE, NULL);
 
 	int concurrentThread = si.dwNumberOfProcessors - 2;
 	if (concurrentThread <= 0)
@@ -409,6 +406,8 @@ bool CNetServer::Init(int maxConnection)
 		return false;
 
 	_TimerThreadHandle = (HANDLE)_beginthreadex(NULL, 0, TimerThread, this, 0, &_TimerThreadID);
+	if (_TimerThreadHandle == NULL)
+		return false;
 
 	//IOCP_THREADCOUNT
 	for (int i = 0; i < IOCP_THREADCOUNT; i++)
@@ -848,5 +847,5 @@ void CNetServer::ReleaseSession(ULONGLONG ulSessionID)
 
 void CNetServer::QuitServer()
 {
-
+	SetEvent(_hQuitEvent);
 }

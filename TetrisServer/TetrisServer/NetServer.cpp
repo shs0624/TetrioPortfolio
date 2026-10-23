@@ -184,7 +184,11 @@ bool CNetServer::AcceptProc(CNetServer* thisPtr)
 	ptr->stIORefCount.ulReleaseCheck = 0;
 	ptr->bSendFlag = false;
 	ptr->bCanceled = false;
+	ptr->dwLastRecvTime = timeGetTime();
+	ptr->dwTimeoutMs = _dwDefaultTimeout;
 	ptr->sock = client_sock;
+
+	InterlockedExchange((LONG*)&ptr->bUseFlag, TRUE);
 
 	InterlockedIncrement((LONG*)&_iAcceptTPS);
 
@@ -349,6 +353,7 @@ void CNetServer::InitializeSessions(ULONG maxConnection)
 
 	for (ULONGLONG i = 0; i < maxConnection; i++)
 	{
+		_sessionArr[i].bUseFlag = false;
 		_sessionArr[i].stIORefCount.ulReleaseCheck = false;
 		_sessionArr[i].sendBuf = new LockFreeQueue<RefCountPointer>();
 		_sessionArr[i].recvBuf = new CRingBuffer(5000);
@@ -373,11 +378,17 @@ bool CNetServer::Init(int maxConnection)
 	if (concurrentThread <= 0)
 		concurrentThread = si.dwNumberOfProcessors - 1;
 
+	_hQuitEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
+
 	_NetIOCPHandle = CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, 0, concurrentThread);
 	if (_NetIOCPHandle == NULL) return false;
 
 	_acceptThreadHandle = (HANDLE)_beginthreadex(NULL, 0, AcceptThread, this, 0, &_acceptThreadID);
 	if (_acceptThreadHandle == NULL)
+		return false;
+
+	_TimerThreadHandle = (HANDLE)_beginthreadex(NULL, 0, TimerThread, this, 0, &_TimerThreadID);
+	if (_TimerThreadHandle == NULL)
 		return false;
 
 	//IOCP_THREADCOUNT
@@ -468,6 +479,8 @@ bool CNetServer::RecvProc_Net(st_NetSession* ptr, DWORD cbTransferred)
 
 			return false;
 		} 
+
+		ptr->dwLastRecvTime = timeGetTime();
 
 		// netHeader만큼 이동시키고, OnRecv
 		OnRecv(ptr->ulSessionID, csPacket);
@@ -814,6 +827,7 @@ void CNetServer::ReleaseSession(ULONGLONG ulSessionID)
 			_pLog._dwPacketPoolUse--;
 	}
 
+	ptr->bUseFlag = false;
 	ptr->dwSendCount = 0;
 	closesocket(ptr->sock);
 
@@ -827,7 +841,67 @@ void CNetServer::ReleaseSession(ULONGLONG ulSessionID)
 	InterlockedDecrement((LONG*)&_iSessionCount);
 }
 
+unsigned int WINAPI CNetServer::TimerThread(LPVOID arg)
+{
+	const DWORD _sSleepTime = 1000;
+
+	CNetServer* thisPtr = (CNetServer*)arg;
+
+	LogController::GetInstance()->RegisterLogStruct(&_pLog);
+
+	DWORD ret = 0;
+	while (1)
+	{
+		thisPtr->TimeCheck();
+
+		ret = WaitForSingleObject(thisPtr->_hQuitEvent, _sSleepTime);
+		if (ret == WAIT_OBJECT_0)
+		{
+			return 0;
+		}
+	}
+}
+
+void CNetServer::TimeCheck()
+{
+	for (int i = 0; i < _imaxConnection; i++)
+	{
+		st_NetSession* pSession = _sessionArr + i;
+		ULONGLONG ulSessionID = pSession->ulSessionID;
+
+		if (!pSession->bUseFlag)
+			continue;
+
+		DWORD timeoutMs = pSession->dwTimeoutMs;
+		DWORD timeDiff = timeGetTime() - pSession->dwLastRecvTime;
+		if (timeDiff >= timeoutMs)
+		{
+			if (Disconnect(ulSessionID))
+			{
+				if (timeoutMs == _dwDefaultTimeout)
+					_pLog._dwTimeoutSessionTotal++;
+				else
+					_pLog._dwTimeoutUserTotal++;
+			}
+				
+			continue;
+		}
+	}
+}
+
+void CNetServer::SetTimeoutMs(ULONGLONG ulSessionID, DWORD timeout)
+{
+	// OnRecv->Login안에서 호출하니까
+	st_NetSession* ptr;
+	FindSession(ulSessionID, &ptr);
+	if (ptr == NULL)
+		return;
+
+	ptr->dwTimeoutMs = timeout;
+	return;
+}
+
 void CNetServer::QuitServer()
 {
-
+	SetEvent(_hQuitEvent);
 }

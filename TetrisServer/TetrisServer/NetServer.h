@@ -38,6 +38,11 @@ struct st_NetSession
 	//RefCountPointer cPacketArr[MAX_PACKET_BATCH];
 	RefCountPointer* cPacketArr;
 
+	// 타임아웃용 시간
+	DWORD dwLastRecvTime;
+	DWORD dwTimeoutMs;
+	BOOL bUseFlag;
+
 	alignas(8) st_IORefCheck stIORefCount;
 	DWORD dwSendCount;
 	//alignas(4) DWORD dwIOCount;
@@ -99,12 +104,18 @@ protected:
 
 	SOCKET _ListenSocket;
 
+	HANDLE _TimerThreadHandle;
 	HANDLE _acceptThreadHandle;
 	HANDLE _NetIOCPHandle;
 	HANDLE _NetIOCPWorkerThreadHandleArr[50];
 
+	HANDLE _hQuitEvent;
+
+	unsigned int _TimerThreadID;
 	unsigned int _acceptThreadID;
 	unsigned int _NetIOCPWorkerThreadID[50];
+
+	const DWORD _dwDefaultTimeout = 10000;
 
 	ULONG _threadID = 1;
 	st_NetSession* _sessionArr;
@@ -127,6 +138,10 @@ protected:
 	// 스레드 함수들
 	static unsigned int WINAPI AcceptThread(LPVOID arg);
 	static unsigned int WINAPI IOCPWorkerThread(LPVOID arg);
+	static unsigned int WINAPI TimerThread(LPVOID arg);
+
+	void SetTimeoutMs(ULONGLONG sessionID, DWORD timeout);
+	void TimeCheck();
 
 	// 메세지 처리를 위한 함수
 	bool AcceptProc(CNetServer* thisPtr);

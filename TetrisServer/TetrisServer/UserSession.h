@@ -78,9 +78,6 @@ struct st_SESSION
 {
 	ULONGLONG ulSessionID;
 	SOCKADDR_IN ClientAddr;
-
-	// 타임아웃용 시간
-	DWORD dwLastRecvTime;
 };
 
 // 로그인 한 유저
@@ -100,10 +97,6 @@ struct st_USER
 
 	// 속한 서버 구분용
 	en_SERVER enServerState;
-
-	// 타임아웃용 시간
-	DWORD dwLastRecvTime;
-	bool bBatched;
 
 	// 공격 메세지 체크용 카운터
 	DWORD dwMessageAlertCount;

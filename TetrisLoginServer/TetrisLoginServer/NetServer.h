@@ -108,7 +108,6 @@ protected:
 	LockFreeStack<ULONGLONG>* _emptyIndexStack;
 
 	HANDLE _hQuitEvent;
-	HANDLE _hTimeoutEvent;
 
 	// 초기화 함수
 	void InitializeSessions(ULONG maxConnection);

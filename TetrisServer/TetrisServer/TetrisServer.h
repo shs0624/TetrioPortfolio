@@ -122,6 +122,7 @@ private:
 	unsigned int _GameTickThreadIDArr[10];
 	
 	// 스레드 당 최대 관리 세션 수, 틱 프레임 타임
+	const DWORD _dwTimeoutUser = 40000;
 	const int _MaxGameSessionPerThread = 500;
 	const DWORD _dwFrameTime = 33;
 	const WORD _wCountDown = 4;
@@ -129,6 +130,7 @@ private:
 	LONG _GameSessionThreadCount = 0;
 	LONG _GameSessionActiveCountArr[10] = { 0 };
 	st_GAMESESSION _GameSessionArr[10][500];
+
 	static unsigned int WINAPI GameTickThread(LPVOID arg);
 	bool inline SleepCheck();
 
