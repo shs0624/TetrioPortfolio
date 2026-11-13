@@ -141,7 +141,7 @@ void TetrisServer::EndGameSession(st_GAMESESSION* pGameSession, int winnerIdx, i
 	if (winnerIdx != -1)
 	{
 		ULONGLONG winnerSessionID = pGameSession->_SessionIDArr[winnerIdx];
-
+		
 		// 승리 패킷
 		RefCountPointer winResultPacket = RefCountPointer::MakeSharedPtr();
 		(*winResultPacket)->Clear(sizeof(st_NetHeader));
@@ -170,6 +170,7 @@ void TetrisServer::EndGameSession(st_GAMESESSION* pGameSession, int winnerIdx, i
 
 void TetrisServer::GameUpdate(st_GAMESESSION* pGameSession)
 {
+	AcquireSRWLockExclusive(&pGameSession->_GameSessionLock);
 	switch (pGameSession->_State)
 	{
 	case en_GAMESTATE_COUNTING:
@@ -179,6 +180,7 @@ void TetrisServer::GameUpdate(st_GAMESESSION* pGameSession)
 		UpdatePlay(pGameSession);
 		break;
 	}
+	ReleaseSRWLockExclusive(&pGameSession->_GameSessionLock);
 }
 
 void TetrisServer::UpdatePlay(st_GAMESESSION* pGameSession)
@@ -186,7 +188,6 @@ void TetrisServer::UpdatePlay(st_GAMESESSION* pGameSession)
 	// 드랍 시간을 체크하고, 시간이 지났으면 드랍중인 블록 한 칸 내리기
 	DWORD nowTime = timeGetTime();
 
-	AcquireSRWLockExclusive(&pGameSession->_GameSessionLock);
 	for (int i = 0; i < 2; i++)
 	{
 		st_GameInfo* pGameInfo = &(pGameSession->_GameInfoArr[i]);
@@ -214,7 +215,6 @@ void TetrisServer::UpdatePlay(st_GAMESESSION* pGameSession)
 				if (!SendPacket_UniCast(pGameSession->_SessionIDArr[i], blockUpdatePacket))
 				{
 					EndGameSession(pGameSession, 1 - i, -1);
-					ReleaseSRWLockExclusive(&pGameSession->_GameSessionLock);
 					return;
 				}
 
@@ -227,7 +227,6 @@ void TetrisServer::UpdatePlay(st_GAMESESSION* pGameSession)
 				if (!SendPacket_UniCast(pGameSession->_SessionIDArr[1 - i], opponetPacket))
 				{
 					EndGameSession(pGameSession, i, -1);
-					ReleaseSRWLockExclusive(&pGameSession->_GameSessionLock);
 					return;
 				}
 			}
@@ -235,7 +234,6 @@ void TetrisServer::UpdatePlay(st_GAMESESSION* pGameSession)
 			pGameInfo->_dwLastDropTime = nowTime;
 		}
 	}
-	ReleaseSRWLockExclusive(&pGameSession->_GameSessionLock);
 }
 
 // 예정 블록 5개를 Bag 배열에 복사해서 넣어주기
@@ -564,7 +562,7 @@ void TetrisServer::UpdateBoard(st_GAMESESSION* pGameSession, int sessionIndex)
 	}
 }
 
-void TetrisServer::CreateBlock(st_GAMESESSION* pGameSession, int sessionIndex)
+bool TetrisServer::CreateBlock(st_GAMESESSION* pGameSession, int sessionIndex)
 {
 	//pGameSession->_GameInfoArr[sessionIndex];
 	st_GameInfo* pGameInfo = &(pGameSession->_GameInfoArr[sessionIndex]);
@@ -577,7 +575,7 @@ void TetrisServer::CreateBlock(st_GAMESESSION* pGameSession, int sessionIndex)
 	{
 		// 게임 오버
 		EndGameSession(pGameSession, 1 - sessionIndex, sessionIndex);
-		return;
+		return false;
 	}
 
 	// 스폰
@@ -589,7 +587,7 @@ void TetrisServer::CreateBlock(st_GAMESESSION* pGameSession, int sessionIndex)
 	if (!SendPacket_UniCast(pGameSession->_SessionIDArr[sessionIndex], blockUpdatePacket))
 	{
 		EndGameSession(pGameSession, 1 - sessionIndex, -1);
-		return;
+		return false;
 	}
 
 	// 스폰
@@ -601,8 +599,10 @@ void TetrisServer::CreateBlock(st_GAMESESSION* pGameSession, int sessionIndex)
 	if (!SendPacket_UniCast(pGameSession->_SessionIDArr[1 - sessionIndex], opponentBlockPacket))
 	{
 		EndGameSession(pGameSession, sessionIndex, -1);
-		return;
+		return false;
 	}
+
+	return true;
 }
 
 void TetrisServer::StartCountDown(st_GAMESESSION* pGameSession)
@@ -630,8 +630,11 @@ void TetrisServer::CheckCountDown(st_GAMESESSION* pGameSession)
 
 	if (pGameSession->startTime < nowTime)
 	{
-		CreateBlock(pGameSession, 0);
-		CreateBlock(pGameSession, 1);
+		if (!CreateBlock(pGameSession, 0))
+			return;
+
+		if (!CreateBlock(pGameSession, 1))
+			return;
 
 		pGameSession->_GameInfoArr[0]._dwLastDropTime = timeGetTime();
 		pGameSession->_GameInfoArr[1]._dwLastDropTime = timeGetTime();

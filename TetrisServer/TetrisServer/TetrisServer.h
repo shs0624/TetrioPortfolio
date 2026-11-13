@@ -91,7 +91,7 @@ private:
 	void GameUpdate(st_GAMESESSION* pGameSession);
 	void UpdatePlay(st_GAMESESSION* pGameSession);
 	void UpdateBoard(st_GAMESESSION* pGameSession, int sessionIndex);
-	void CreateBlock(st_GAMESESSION* pGameSession, int sessionIndex);
+	bool CreateBlock(st_GAMESESSION* pGameSession, int sessionIndex);
 	void GetNextBlockArr(st_GameInfo* pGameInfo, enTetBlock* pBagArr);
 	enTetBlock GetNextBlockType(st_GameInfo* pGameInfo, enTetBlock* pBagArr);
 	void GenerateBag(enTetBlock* pBag);

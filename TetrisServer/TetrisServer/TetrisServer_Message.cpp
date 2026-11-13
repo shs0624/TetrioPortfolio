@@ -418,6 +418,19 @@ void TetrisServer::MessageProc_GameInput(ULONGLONG sessionID, RefCountPointer& c
 	en_INPUT_TYPE inputType;
 	(**cPacket) >> (DWORD&)inputType;
 
+	st_GAMESESSION* pGameSession = userPtr->pGameSession;
+
+	AcquireSRWLockExclusive(&userPtr->pGameSession->_GameSessionLock);
+	if ((userPtr->pGameSession->_State != en_GAMESTATE_PLAYING) ||
+		(userPtr->pGameSession->_SessionIDArr[userPtr->byGameSessionIndex] != sessionID))
+	{
+		ReleaseSRWLockExclusive(&userPtr->pGameSession->_GameSessionLock);
+		if (!cPacket.DecRefCount())
+			_pLog._dwPacketPoolUse--;
+
+		return;
+	}
+
 	switch (inputType)
 	{
 	case en_INPUT_LEFT:
@@ -441,7 +454,12 @@ void TetrisServer::MessageProc_GameInput(ULONGLONG sessionID, RefCountPointer& c
 	case en_INPUT_HOLD:
 		Hold(userPtr->pGameSession, userPtr->byGameSessionIndex, cPacket);
 		break;
+	default:
+		if (!cPacket.DecRefCount())
+			_pLog._dwPacketPoolUse--;
+		break;
 	}
+	ReleaseSRWLockExclusive(&userPtr->pGameSession->_GameSessionLock);
 }
 
 void TetrisServer::MessageProc_ReturnChat(ULONGLONG sessionID, RefCountPointer& cPacket)
